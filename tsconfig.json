@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/protocol" },
+    { "path": "packages/codecs/qr-fountain" },
+    { "path": "packages/sim" },
+    { "path": "packages/sender" },
+    { "path": "packages/receiver" },
+    { "path": "packages/ui" }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "name": "@oat/qr-fountain",
+  "version": "0.1.0",
+  "description": "LT fountain coding + QR frame render/decode for optical artifact transport",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "jsqr": "^1.4.0"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "^0.1.62",
+    "@types/qrcode": "^1.5.5",
+    "typescript": "^5.6.3"
+  }
+}

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Optical Artifact Transport — demo</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <header>
+    <h1>Optical Artifact Transport</h1>
+    <p>
+      A signed artifact leaves <code>&lt;optical-send&gt;</code> as an animated, fountain-coded QR
+      sequence and is reconstructed by <code>&lt;optical-receive&gt;</code>. This page runs both
+      elements against each other in a <strong>local loopback</strong> — it reads the sender's
+      rendered canvas pixels each frame and feeds them into the receiver exactly as a phone
+      camera would, so the whole pipeline runs for real without needing camera hardware. Use
+      "Start camera instead" to try a genuine cross-device transfer.
+    </p>
+  </header>
+
+  <main>
+    <section class="panel" id="sender-panel">
+      <h2>Sender</h2>
+      <label>
+        Message to send
+        <textarea id="message" rows="3">Signed task state and continuation metadata for an agent handoff.</textarea>
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" id="sign-toggle" checked />
+        Sign the artifact (Ed25519)
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" id="proposal-toggle" checked />
+        Include a UI proposal (agent-handoff form)
+      </label>
+      <button id="prepare-btn" type="button">Prepare &amp; start sending</button>
+
+      <optical-send id="sender" controls frame-rate="12" title="Agent handoff" summary="Resume a task on this device">
+        <template slot="proposal">
+          <form>
+            <h1>Import agent handoff</h1>
+            <p>The handoff contains task state, a plan, and a scoped continuation token.</p>
+            <label>
+              Import mode
+              <select name="mode" data-optical-field>
+                <option value="preview">Preview only</option>
+                <option value="resume" selected>Resume task</option>
+                <option value="fork">Fork task</option>
+              </select>
+            </label>
+            <button type="submit" data-optical-action="submit" data-optical-capability="agent.session.import">
+              Continue
+            </button>
+            <button type="button" data-optical-action="reject">Cancel</button>
+          </form>
+        </template>
+        <template slot="fallback"><p>Import a signed agent-session handoff?</p></template>
+      </optical-send>
+
+      <pre id="sender-log" class="log"></pre>
+    </section>
+
+    <section class="panel" id="receiver-panel">
+      <h2>Receiver</h2>
+      <div class="controls-row">
+        <button id="loopback-btn" type="button">Start local loopback (no camera)</button>
+        <button id="camera-btn" type="button">Start camera instead</button>
+        <button id="reset-btn" type="button">Reset</button>
+      </div>
+
+      <optical-receive id="receiver" controls ui-policy="safe"></optical-receive>
+
+      <div id="proposal-host"></div>
+      <div id="capability-host"></div>
+
+      <h3>Delivered artifact</h3>
+      <pre id="result" class="log">(nothing received yet)</pre>
+      <pre id="receiver-log" class="log"></pre>
+    </section>
+  </main>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

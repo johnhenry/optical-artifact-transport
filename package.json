@@ -1,0 +1,36 @@
+{
+  "name": "optical-artifact-transport",
+  "private": true,
+  "version": "0.1.0",
+  "description": "OAT: browser-native optical-send/optical-receive web components for screen-to-camera artifact transport",
+  "type": "module",
+  "workspaces": [
+    "packages/protocol",
+    "packages/codecs/qr-fountain",
+    "packages/sim",
+    "packages/sender",
+    "packages/receiver",
+    "packages/ui",
+    "examples/file-transfer"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --pretty",
+    "dev:demo": "npm run dev -w examples/file-transfer",
+    "start": "serve -l tcp://0.0.0.0:${PORT:-3000} examples/file-transfer/dist"
+  },
+  "dependencies": {
+    "serve": "^14.2.4"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "^0.1.62",
+    "happy-dom": "^15.11.6",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
