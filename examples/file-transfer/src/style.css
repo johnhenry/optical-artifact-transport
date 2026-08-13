@@ -91,6 +91,14 @@ label {
   font-size: 0.9rem;
 }
 
+/* `label { display: flex }` above is an author rule and always beats the
+   UA stylesheet's `[hidden] { display: none }` regardless of specificity
+   (origin outranks specificity in the cascade) — without this, setting
+   `.hidden = true` on a <label> silently does nothing. */
+[hidden] {
+  display: none !important;
+}
+
 label.checkbox {
   flex-direction: row;
   align-items: center;
@@ -139,15 +147,22 @@ optical-receive {
 }
 
 #proposal-host,
-#capability-host {
+#capability-host,
+#result-media {
   border: 1px dashed #999;
   border-radius: 6px;
   padding: 0.75rem;
 }
 
 #proposal-host:empty,
-#capability-host:empty {
+#capability-host:empty,
+#result-media:empty {
   display: none;
+}
+
+#result-media img {
+  max-width: 100%;
+  display: block;
 }
 
 .hint {

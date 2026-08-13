@@ -35,6 +35,7 @@
         What to send
         <select id="payload-type">
           <option value="message">Plain message (M0-M4)</option>
+          <option value="file">Arbitrary file (image, PDF, ...)</option>
           <option value="release-manifest">Release manifest bootstrap (M5)</option>
           <option value="webrtc-offer">WebRTC offer bootstrap (M5)</option>
           <option value="unsafe-demo">Unsafe HTML break-glass demo (M6)</option>
@@ -44,6 +45,11 @@
         Message to send
         <textarea id="message" rows="3">Signed task state and continuation metadata for an agent handoff.</textarea>
       </label>
+      <label id="file-field">
+        File to send
+        <input type="file" id="file-input" />
+      </label>
+      <p class="hint" id="file-estimate"></p>
       <label class="checkbox" id="sign-field">
         <input type="checkbox" id="sign-toggle" checked />
         Sign the artifact (Ed25519)
@@ -104,6 +110,7 @@
 
       <h3>Delivered artifact</h3>
       <pre id="result" class="log">(nothing received yet)</pre>
+      <div id="result-media"></div>
       <pre id="receiver-log" class="log"></pre>
     </section>
 
