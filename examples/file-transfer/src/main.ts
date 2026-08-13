@@ -93,7 +93,50 @@ function toHex(bytes: Uint8Array): string {
 }
 
 const signingKey = generateSigningKey();
-receiver.trustedPublicKeys = [toHex(signingKey.publicKey)];
+const ownPublicKeyHex = toHex(signingKey.publicKey);
+
+// The receiver's trust list starts out containing only *this device's own*
+// key, which is all the same-tab loopback demo ever needs (the sender and
+// receiver share one JS context and one signingKey). A genuine cross-device
+// transfer needs the receiving device to be told the *sending* device's
+// public key explicitly — see the "Trust a sender's public key" control.
+let trustedKeys = [ownPublicKeyHex];
+receiver.trustedPublicKeys = trustedKeys;
+
+const trustedKeysList = $<HTMLElement>('#trusted-keys-list');
+function renderTrustedKeys(): void {
+  trustedKeysList.textContent = `Currently trusted: ${trustedKeys.map((k) => k.slice(0, 12) + '…').join(', ')}`;
+}
+renderTrustedKeys();
+
+const senderPubkeyDisplay = $<HTMLInputElement>('#sender-pubkey-display');
+senderPubkeyDisplay.value = ownPublicKeyHex;
+
+$<HTMLButtonElement>('#copy-pubkey-btn').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(ownPublicKeyHex);
+    log(senderLog, 'copied public key to clipboard');
+  } catch {
+    senderPubkeyDisplay.select();
+    log(senderLog, "couldn't access the clipboard — key is selected, copy manually");
+  }
+});
+
+$<HTMLButtonElement>('#trust-key-btn').addEventListener('click', () => {
+  const input = $<HTMLInputElement>('#trust-key-input');
+  const key = input.value.trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(key)) {
+    log(receiverLog, 'invalid public key: expected 64 lowercase hex characters');
+    return;
+  }
+  if (!trustedKeys.includes(key)) {
+    trustedKeys = [...trustedKeys, key];
+    receiver.trustedPublicKeys = trustedKeys;
+    renderTrustedKeys();
+    log(receiverLog, 'now trusting sender public key:', key);
+  }
+  input.value = '';
+});
 
 $<HTMLInputElement>('#approval-toggle').addEventListener('change', (e) => {
   receiver.approvalPolicy = (e.target as HTMLInputElement).checked ? { 'safe-html': 'prompt' } : {};

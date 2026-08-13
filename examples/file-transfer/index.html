@@ -45,6 +45,20 @@
       </label>
       <button id="prepare-btn" type="button">Prepare &amp; start sending</button>
 
+      <label>
+        This device's signing public key
+        <div class="controls-row">
+          <input type="text" id="sender-pubkey-display" readonly />
+          <button id="copy-pubkey-btn" type="button">Copy</button>
+        </div>
+      </label>
+      <p class="hint">
+        For a real cross-device transfer: copy this key and paste it into
+        "Trust a sender's public key" on the <em>receiving</em> device — each
+        device generates its own random key on page load, so the receiver
+        won't trust a signature it hasn't been told about.
+      </p>
+
       <optical-send id="sender" controls frame-rate="12" title="Agent handoff" summary="Resume a task on this device">
         <template slot="proposal">
           <form>
@@ -81,6 +95,14 @@
         <input type="checkbox" id="approval-toggle" />
         Gate safe-html proposals behind an explicit confirm (approval: "prompt")
       </label>
+      <label>
+        Trust a sender's public key (paste from the sending device)
+        <div class="controls-row">
+          <input type="text" id="trust-key-input" placeholder="64-char hex public key" />
+          <button id="trust-key-btn" type="button">Trust this key</button>
+        </div>
+      </label>
+      <p class="hint" id="trusted-keys-list"></p>
 
       <optical-receive id="receiver" controls ui-policy="safe"></optical-receive>
 
