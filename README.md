@@ -73,6 +73,42 @@ against the original design conversation (`docs/design.md`):
   `@oat/ui`'s `renderTrustPrompt()` renders the "confirm public key:
   ..." fingerprint prompt the demo uses.
 
+`examples/file-transfer` was then expanded to exercise more of the
+library's existing surface end to end, surfacing one correctness fix along
+the way:
+
+- **Arbitrary file transfer** — any file (image, PDF, ...) travels through
+  the same pipeline as a plain message; the receiver renders an image
+  preview or a download link depending on media type. No library changes
+  were needed — `<optical-send>`'s `source` setter already accepts a `Blob`
+  (picking up its `type` automatically) and `controls` already renders a
+  live transfer progress bar.
+- **Declarative `safe-view` form proposal** — a "Schedule a follow-up" demo
+  exercises the `'form'` `safe-view` kind (`renderFormView`), implemented
+  since M4 but never exercised by the demo before: no HTML at all, just
+  typed field descriptors the receiver renders itself.
+- **Live receiver policy presets** — a dropdown switches the receiver
+  between Safe/Strict/Permissive/Locked-down `ReceiverUiPolicy`
+  configurations at runtime, demonstrating the granular per-profile policy
+  system end to end. This surfaced two small `<optical-receive>` reactivity
+  gaps, both fixed: the `ui-policy` attribute wasn't observed after
+  construction (every other policy input was a property setter that
+  rebuilds the engine on write; this one only got picked up incidentally),
+  and there was no settable `autoApprove` property at all even though the
+  policy engine already supported it.
+- **Capabilities with real effects** — granting `calendar.event.create` on
+  the structured-form proposal now builds and downloads a real `.ics` file
+  instead of just logging the grant, re-checked via `checkCapability()` at
+  submit time rather than trusted from the action payload.
+- **Fix: `trustSenderAndContinue()` now rebuilds the policy engine.** It
+  previously mutated the trust list directly instead of going through the
+  `trustedPublicKeys` setter, so `allowUnsafeHtml`'s trust-list-length check
+  stayed stale at "nobody trusted yet" until some *other* setter happened to
+  trigger a rebuild afterward. In practice: a newly-trusted sender's very
+  first M6 proposal, sent immediately after confirming trust, could
+  downgrade instead of reaching `accept-unsafe` even with `allowUnsafeHtml`
+  already opted in.
+
 ## Packages
 
 ```
@@ -85,7 +121,7 @@ packages/
   ui/                  safe-view/safe-html rendering, sanitizer (native-API layering + resource limits), M6 sandbox host + iframe bridge + Trusted Types policy
   bootstrap/           M5 bootstrap workflows: release-manifest fetch+verify, WebRTC offer/answer
 examples/
-  file-transfer/       live demo wiring sender + receiver together, including M5/M6 flows + the ui.decision round trip
+  file-transfer/       live demo wiring sender + receiver together: M5/M6 flows, the ui.decision round trip, arbitrary file transfer, a declarative form proposal, live receiver policy presets, and a capability with a real (downloadable) effect
 ```
 
 ## Development
