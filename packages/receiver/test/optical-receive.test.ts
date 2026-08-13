@@ -481,6 +481,50 @@ describe('<optical-receive> end-to-end (synthetic QR frames)', () => {
     expect(evt.detail.verification.senderTrusted).toBe(true);
   });
 
+  it('trustSenderAndContinue() makes the newly-trusted sender immediately eligible for accept-unsafe, not just the current frame', async () => {
+    const uiProposal: UiProposalEnvelope = {
+      type: 'ui.proposal',
+      version: 1,
+      proposalId: 'p-tofu-unsafe',
+      origin: { id: 'sender-1' },
+      title: 'Break glass demo',
+      preferredView: { kind: 'sandboxed-html', html: '<button>go</button>' },
+      fallbackView: { kind: 'text', body: 'fallback' },
+      requestedCapabilities: [],
+      requestedProfile: 'sandboxed-html'
+    };
+    const { secretKey } = generateSigningKey();
+    const artifact = await buildArtifact({
+      mediaType: 'application/json',
+      payload: new TextEncoder().encode('{}'),
+      uiProposal,
+      sign: { secretKey }
+    });
+    const envelopeBytes = encodeCanonical(artifact) as Uint8Array;
+    const frames = await renderFrames(envelopeBytes, 96, 40);
+
+    const el = mount();
+    el.allowUnsafeHtml = true;
+    el.requireExplicitTrust = true; // starts with an empty trust list — first send is an unknown sender
+
+    for (const frame of frames) {
+      el.processFrame(frame);
+      if (el.state === 'unknown-sender') break;
+    }
+    expect(el.state).toBe('unknown-sender');
+
+    // trustSenderAndContinue() mutates the trust list directly (not via the
+    // trustedPublicKeys setter) — this must still rebuild the policy engine,
+    // or allowUnsafeHtml's trust-list-length check stays stale from before
+    // anyone was trusted, and this proposal (still pending, no new frames)
+    // downgrades instead of reaching accept-unsafe.
+    el.trustSenderAndContinue();
+
+    expect(el.state).toBe('unsafe-proposed');
+    expect(el.uiDecision?.outcome).toBe('accept-unsafe');
+    expect(el.uiDecision?.reasons).toEqual([]);
+  });
+
   it('a second artifact from the same now-trusted sender no longer triggers unknown-sender', async () => {
     const { secretKey } = generateSigningKey();
     const el = mount();

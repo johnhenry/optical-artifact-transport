@@ -599,9 +599,46 @@ receiver.addEventListener('oat-artifact', (async (e: CustomEvent) => {
   resultEl.textContent = new TextDecoder().decode(bytes);
 }) as unknown as EventListener);
 
+// Minimal iCalendar (RFC 5545) VEVENT builder — just enough to produce a
+// downloadable .ics that Calendar/Outlook/etc. will accept.
+function buildIcs(title: string, date: string): string {
+  const escape = (s: string) => s.replace(/[\\;,]/g, (c) => `\\${c}`).replace(/\n/g, '\\n');
+  const dateStamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  const eventDate = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.replace(/-/g, '') : dateStamp.slice(0, 8);
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//optical-artifact-transport demo//EN',
+    'BEGIN:VEVENT',
+    `UID:${crypto.randomUUID()}`,
+    `DTSTAMP:${dateStamp}`,
+    `DTSTART;VALUE=DATE:${eventDate}`,
+    `SUMMARY:${escape(title)}`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+    ''
+  ].join('\r\n');
+}
+
 function handleUiAction(action: UiActionRequest): void {
   log(receiverLog, 'ui action:', action);
   if (action.action === 'reject') proposalHost.replaceChildren();
+
+  // Re-check the capability against the live policy engine rather than
+  // trusting the action payload — the same principle checkCapability() is
+  // built for (the M6 sandbox bridge mediates each request the same way):
+  // a submit action naming a capability is not proof it was actually granted.
+  if (action.action === 'submit' && action.capability === 'calendar.event.create' && receiver.checkCapability('calendar.event.create')) {
+    const data = action.data ?? {};
+    const title = typeof data.title === 'string' && data.title ? data.title : 'Event';
+    const date = typeof data.date === 'string' ? data.date : '';
+    const ics = buildIcs(title, date);
+    const url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
+    const link = Object.assign(document.createElement('a'), { href: url, download: 'event.ics' });
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    log(receiverLog, 'calendar.event.create: downloaded event.ics for', { title, date });
+  }
 }
 
 receiver.addEventListener('oat-ui-proposal', ((e: CustomEvent) => {

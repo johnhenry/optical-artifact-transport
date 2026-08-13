@@ -315,6 +315,13 @@ export class OpticalReceiveElement extends HTMLElement {
     const keyHex = toHex(this.#artifact.signature.publicKey);
     if (!this.#trustedPublicKeysHex.includes(keyHex)) {
       this.#trustedPublicKeysHex = [...this.#trustedPublicKeysHex, keyHex];
+      // The policy engine's own allowUnsafeHtml is computed from
+      // trustedPublicKeysHex.length at rebuild time (see
+      // #rebuildPolicyEngine) — mutating the field directly, unlike every
+      // other trust-list write, which goes through the trustedPublicKeys
+      // setter, left it stale until some *other* setter happened to rebuild
+      // it. Newly-trusted senders could stay ineligible for M6 until then.
+      this.#rebuildPolicyEngine();
     }
     const artifact = this.#artifact;
     const verification = this.#verifyArtifact(artifact);
