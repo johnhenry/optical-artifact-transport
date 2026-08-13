@@ -15,6 +15,50 @@ header p {
   color: #555;
 }
 
+.header-row {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+#qr-share {
+  position: relative;
+}
+
+#qr-share summary {
+  cursor: pointer;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  border: 1px solid #888;
+  background: #f4f4f4;
+  color: #111;
+  font-size: 0.85rem;
+  list-style: none;
+}
+
+#qr-share summary::-webkit-details-marker {
+  display: none;
+}
+
+#qr-share-body {
+  position: absolute;
+  right: 0;
+  z-index: 1;
+  margin-top: 0.4rem;
+  padding: 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: canvas;
+  width: 220px;
+  text-align: center;
+}
+
+#qr-share-body .hint {
+  margin-top: 0.5rem;
+}
+
 main {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -63,6 +107,7 @@ button {
   border-radius: 6px;
   border: 1px solid #888;
   background: #f4f4f4;
+  color: #111;
 }
 
 button:hover {

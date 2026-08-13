@@ -8,7 +8,16 @@
 </head>
 <body>
   <header>
-    <h1>Optical Artifact Transport</h1>
+    <div class="header-row">
+      <h1>Optical Artifact Transport</h1>
+      <details id="qr-share">
+        <summary>Open on another device</summary>
+        <div id="qr-share-body">
+          <canvas id="qr-share-canvas"></canvas>
+          <p class="hint">Scan with a phone camera to open this page there — handy for a genuine cross-device transfer.</p>
+        </div>
+      </details>
+    </div>
     <p>
       A signed artifact leaves <code>&lt;optical-send&gt;</code> as an animated, fountain-coded QR
       sequence and is reconstructed by <code>&lt;optical-receive&gt;</code>. This page runs both
@@ -44,20 +53,6 @@
         Include a UI proposal (agent-handoff form)
       </label>
       <button id="prepare-btn" type="button">Prepare &amp; start sending</button>
-
-      <label>
-        This device's signing public key
-        <div class="controls-row">
-          <input type="text" id="sender-pubkey-display" readonly />
-          <button id="copy-pubkey-btn" type="button">Copy</button>
-        </div>
-      </label>
-      <p class="hint">
-        For a real cross-device transfer: copy this key and paste it into
-        "Trust a sender's public key" on the <em>receiving</em> device — each
-        device generates its own random key on page load, so the receiver
-        won't trust a signature it hasn't been told about.
-      </p>
 
       <optical-send id="sender" controls frame-rate="12" title="Agent handoff" summary="Resume a task on this device">
         <template slot="proposal">
@@ -95,17 +90,15 @@
         <input type="checkbox" id="approval-toggle" />
         Gate safe-html proposals behind an explicit confirm (approval: "prompt")
       </label>
-      <label>
-        Trust a sender's public key (paste from the sending device)
-        <div class="controls-row">
-          <input type="text" id="trust-key-input" placeholder="64-char hex public key" />
-          <button id="trust-key-btn" type="button">Trust this key</button>
-        </div>
-      </label>
-      <p class="hint" id="trusted-keys-list"></p>
+      <p class="hint">
+        The first artifact from a new signing key pauses here for you to
+        confirm its fingerprint (trust-on-first-use) — the public key itself
+        travels with the signature, so there's nothing to copy or paste.
+      </p>
 
       <optical-receive id="receiver" controls ui-policy="safe"></optical-receive>
 
+      <div id="trust-host"></div>
       <div id="proposal-host"></div>
       <div id="capability-host"></div>
 

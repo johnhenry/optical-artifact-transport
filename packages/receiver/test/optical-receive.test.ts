@@ -429,6 +429,125 @@ describe('<optical-receive> end-to-end (synthetic QR frames)', () => {
     expect(el.uiDecision?.reasons).toContain('signature-required-for-profile');
   });
 
+  it('fires oat-unknown-sender (not oat-rejected) for a validly signed artifact from an untrusted key under requireExplicitTrust', async () => {
+    const { secretKey, publicKey } = generateSigningKey();
+    const artifact = await buildArtifact({ mediaType: 'text/plain', payload: new TextEncoder().encode('hi'), sign: { secretKey } });
+    const envelopeBytes = encodeCanonical(artifact) as Uint8Array;
+    const frames = await renderFrames(envelopeBytes, 96, 40);
+
+    const el = mount();
+    el.requireExplicitTrust = true; // trust list starts empty — nothing is trusted yet
+
+    let rejected = false;
+    el.addEventListener('oat-rejected', () => (rejected = true));
+    const unknownSenderEvent = new Promise<CustomEvent>((resolve) =>
+      el.addEventListener('oat-unknown-sender', (e) => resolve(e as CustomEvent), { once: true })
+    );
+
+    for (const frame of frames) {
+      el.processFrame(frame);
+      if (el.state === 'unknown-sender') break;
+    }
+
+    const evt = await unknownSenderEvent;
+    expect(el.state).toBe('unknown-sender');
+    expect(rejected).toBe(false);
+    expect(evt.detail.publicKeyHex).toBe(toHex(publicKey));
+  });
+
+  it('trustSenderAndContinue() re-verifies and delivers without any new frames', async () => {
+    const { secretKey } = generateSigningKey();
+    const artifact = await buildArtifact({ mediaType: 'text/plain', payload: new TextEncoder().encode('hi'), sign: { secretKey } });
+    const envelopeBytes = encodeCanonical(artifact) as Uint8Array;
+    const frames = await renderFrames(envelopeBytes, 96, 40);
+
+    const el = mount();
+    el.requireExplicitTrust = true;
+
+    for (const frame of frames) {
+      el.processFrame(frame);
+      if (el.state === 'unknown-sender') break;
+    }
+    expect(el.state).toBe('unknown-sender');
+
+    const artifactEvent = new Promise<CustomEvent>((resolve) =>
+      el.addEventListener('oat-artifact', (e) => resolve(e as CustomEvent), { once: true })
+    );
+    el.trustSenderAndContinue();
+
+    const evt = await artifactEvent;
+    expect(el.state).toBe('accepted');
+    expect(evt.detail.verification.valid).toBe(true);
+    expect(evt.detail.verification.senderTrusted).toBe(true);
+  });
+
+  it('a second artifact from the same now-trusted sender no longer triggers unknown-sender', async () => {
+    const { secretKey } = generateSigningKey();
+    const el = mount();
+    el.requireExplicitTrust = true;
+
+    const first = await buildArtifact({ mediaType: 'text/plain', payload: new TextEncoder().encode('one'), sign: { secretKey } });
+    const firstFrames = await renderFrames(encodeCanonical(first) as Uint8Array, 96, 40);
+    for (const frame of firstFrames) {
+      el.processFrame(frame);
+      if (el.state === 'unknown-sender') break;
+    }
+    el.trustSenderAndContinue();
+    expect(el.state).toBe('accepted');
+
+    el.reset();
+    const second = await buildArtifact({ mediaType: 'text/plain', payload: new TextEncoder().encode('two'), sign: { secretKey } });
+    const secondFrames = await renderFrames(encodeCanonical(second) as Uint8Array, 96, 40);
+    for (const frame of secondFrames) {
+      el.processFrame(frame);
+      if (el.state === 'accepted') break;
+    }
+
+    expect(el.state).toBe('accepted');
+  });
+
+  it('rejectUnknownSender() rejects without adding the key to the trust list', async () => {
+    const { secretKey } = generateSigningKey();
+    const artifact = await buildArtifact({ mediaType: 'text/plain', payload: new TextEncoder().encode('hi'), sign: { secretKey } });
+    const envelopeBytes = encodeCanonical(artifact) as Uint8Array;
+    const frames = await renderFrames(envelopeBytes, 96, 40);
+
+    const el = mount();
+    el.requireExplicitTrust = true;
+
+    for (const frame of frames) {
+      el.processFrame(frame);
+      if (el.state === 'unknown-sender') break;
+    }
+
+    el.rejectUnknownSender();
+    expect(el.state).toBe('rejected');
+
+    // Confirm the key really wasn't added: resending the same artifact hits unknown-sender again.
+    el.reset();
+    for (const frame of frames) {
+      el.processFrame(frame);
+      if (el.state !== 'idle' && el.state !== 'camera-ready' && el.state !== 'receiving' && el.state !== 'verifying') break;
+    }
+    expect(el.state).toBe('unknown-sender');
+  });
+
+  it('an unsigned artifact is rejected outright under requireExplicitTrust, not routed through unknown-sender', async () => {
+    const artifact = await buildArtifact({ mediaType: 'text/plain', payload: new TextEncoder().encode('hi') }); // unsigned
+    const envelopeBytes = encodeCanonical(artifact) as Uint8Array;
+    const frames = await renderFrames(envelopeBytes, 96, 40);
+
+    const el = mount();
+    el.requireExplicitTrust = true;
+
+    for (const frame of frames) {
+      el.processFrame(frame);
+      if (el.state === 'rejected') break;
+    }
+
+    expect(el.state).toBe('rejected');
+  });
+
   it('processFrame ignores frames with no decodable QR code', async () => {
     const el = mount();
     const blank: ImageDataLike = { data: new Uint8ClampedArray(400 * 400 * 4).fill(255), width: 400, height: 400 };

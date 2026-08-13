@@ -11,7 +11,8 @@ import {
   type UiActionRequest,
   type UiProposalEnvelope
 } from '@oat/protocol';
-import { renderSafeHtml, renderSafeView, renderCapabilityPrompt, renderUnsafeOptInPrompt, mountSandboxedHtml } from '@oat/ui';
+import { renderSafeHtml, renderSafeView, renderCapabilityPrompt, renderUnsafeOptInPrompt, mountSandboxedHtml, renderTrustPrompt } from '@oat/ui';
+import QRCode from 'qrcode';
 import {
   buildReleaseManifestArtifact,
   extractReleaseManifest,
@@ -35,6 +36,7 @@ const receiverLog = $<HTMLPreElement>('#receiver-log');
 const resultEl = $<HTMLPreElement>('#result');
 const proposalHost = $<HTMLDivElement>('#proposal-host');
 const capabilityHost = $<HTMLDivElement>('#capability-host');
+const trustHost = $<HTMLDivElement>('#trust-host');
 const proposalTemplate = sender.querySelector('template[slot="proposal"]') as HTMLTemplateElement;
 const payloadTypeSelect = $<HTMLSelectElement>('#payload-type');
 
@@ -95,47 +97,23 @@ function toHex(bytes: Uint8Array): string {
 const signingKey = generateSigningKey();
 const ownPublicKeyHex = toHex(signingKey.publicKey);
 
-// The receiver's trust list starts out containing only *this device's own*
-// key, which is all the same-tab loopback demo ever needs (the sender and
-// receiver share one JS context and one signingKey). A genuine cross-device
-// transfer needs the receiving device to be told the *sending* device's
-// public key explicitly — see the "Trust a sender's public key" control.
-let trustedKeys = [ownPublicKeyHex];
-receiver.trustedPublicKeys = trustedKeys;
+// The receiver starts with an empty trust list and requires explicit trust
+// for every signer — including this device's own key, in the same-tab
+// loopback case. The public key travels inline with every signed artifact's
+// signature, so there is nothing to copy or paste: the first artifact from
+// an unrecognized key pauses in 'unknown-sender' state (see the
+// oat-unknown-sender handler below) until the user confirms its fingerprint.
+receiver.requireExplicitTrust = true;
+receiver.trustedPublicKeys = [];
 
-const trustedKeysList = $<HTMLElement>('#trusted-keys-list');
-function renderTrustedKeys(): void {
-  trustedKeysList.textContent = `Currently trusted: ${trustedKeys.map((k) => k.slice(0, 12) + '…').join(', ')}`;
-}
-renderTrustedKeys();
-
-const senderPubkeyDisplay = $<HTMLInputElement>('#sender-pubkey-display');
-senderPubkeyDisplay.value = ownPublicKeyHex;
-
-$<HTMLButtonElement>('#copy-pubkey-btn').addEventListener('click', async () => {
-  try {
-    await navigator.clipboard.writeText(ownPublicKeyHex);
-    log(senderLog, 'copied public key to clipboard');
-  } catch {
-    senderPubkeyDisplay.select();
-    log(senderLog, "couldn't access the clipboard — key is selected, copy manually");
-  }
-});
-
-$<HTMLButtonElement>('#trust-key-btn').addEventListener('click', () => {
-  const input = $<HTMLInputElement>('#trust-key-input');
-  const key = input.value.trim().toLowerCase();
-  if (!/^[0-9a-f]{64}$/.test(key)) {
-    log(receiverLog, 'invalid public key: expected 64 lowercase hex characters');
-    return;
-  }
-  if (!trustedKeys.includes(key)) {
-    trustedKeys = [...trustedKeys, key];
-    receiver.trustedPublicKeys = trustedKeys;
-    renderTrustedKeys();
-    log(receiverLog, 'now trusting sender public key:', key);
-  }
-  input.value = '';
+// Renders lazily on first open rather than at page load, since most visits
+// never touch this dropdown.
+const qrShare = $<HTMLDetailsElement>('#qr-share');
+let qrShareRendered = false;
+qrShare.addEventListener('toggle', () => {
+  if (!qrShare.open || qrShareRendered) return;
+  qrShareRendered = true;
+  void QRCode.toCanvas($<HTMLCanvasElement>('#qr-share-canvas'), location.href, { width: 200, margin: 1 });
 });
 
 $<HTMLInputElement>('#approval-toggle').addEventListener('change', (e) => {
@@ -304,6 +282,7 @@ $<HTMLButtonElement>('#reset-btn').addEventListener('click', () => {
   receiver.reset();
   proposalHost.replaceChildren();
   capabilityHost.replaceChildren();
+  trustHost.replaceChildren();
   resultEl.textContent = '(nothing received yet)';
 });
 
@@ -315,6 +294,28 @@ receiver.addEventListener('oat-error', ((e: CustomEvent) => log(receiverLog, 'er
 receiver.addEventListener('oat-rejected', ((e: CustomEvent) => {
   log(receiverLog, 'rejected:', e.detail?.verification?.reasons ?? e.detail?.reasons);
   resultEl.textContent = `Rejected: ${JSON.stringify(e.detail?.verification?.reasons ?? e.detail?.reasons)}`;
+}) as EventListener);
+
+// Trust-on-first-use: the artifact's digest and signature already checked out
+// — the only thing missing is that this receiver hasn't seen this signer's
+// public key before. Pause here and let the user confirm the fingerprint
+// rather than silently trusting or silently rejecting.
+receiver.addEventListener('oat-unknown-sender', ((e: CustomEvent) => {
+  const { publicKeyHex } = e.detail;
+  log(receiverLog, 'unknown sender, awaiting trust confirmation:', publicKeyHex);
+  renderTrustPrompt({
+    container: trustHost,
+    publicKeyHex,
+    onTrust: () => {
+      trustHost.replaceChildren();
+      log(receiverLog, 'sender trusted:', publicKeyHex);
+      receiver.trustSenderAndContinue();
+    },
+    onReject: () => {
+      trustHost.replaceChildren();
+      receiver.rejectUnknownSender();
+    }
+  });
 }) as EventListener);
 
 receiver.addEventListener('oat-consent-required', ((e: CustomEvent) => {

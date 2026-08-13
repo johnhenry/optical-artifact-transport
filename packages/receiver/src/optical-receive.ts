@@ -12,7 +12,7 @@ import { createCameraController, type CameraController, type FacingMode } from '
 import { createInlineDecodeWorker, type DecodeWorker } from './decode-worker.js';
 import { PacketStore } from './packet-store.js';
 import { assembleArtifact } from './assembler.js';
-import { verifyReceivedArtifact, type ReceiverVerificationResult } from './verifier.js';
+import { verifyReceivedArtifact, toHex, type ReceiverVerificationResult } from './verifier.js';
 import { PolicyEngine, profileOf, type PolicyDecision, type SignableProfile, type UiApprovalMode } from './policy-engine.js';
 
 export type ReceiverState =
@@ -21,6 +21,7 @@ export type ReceiverState =
   | 'camera-ready'
   | 'receiving'
   | 'verifying'
+  | 'unknown-sender'
   | 'accepted'
   | 'ui-proposed'
   | 'unsafe-proposed'
@@ -35,6 +36,7 @@ const DISPLAY_BUCKET: Record<ReceiverState, 'empty' | 'scanning' | 'verifying' |
   'camera-ready': 'empty',
   receiving: 'scanning',
   verifying: 'verifying',
+  'unknown-sender': 'verifying',
   accepted: 'complete',
   'ui-proposed': 'complete',
   'unsafe-proposed': 'complete',
@@ -98,6 +100,7 @@ export class OpticalReceiveElement extends HTMLElement {
   #capabilityPolicy: CapabilityPolicy = createCapabilityPolicy([]);
   #allowUnsafeHtml = false;
   #trustedPublicKeysHex: string[] = [];
+  #requireExplicitTrust = false;
   #requireSignatureFor: SignableProfile[] = [];
   #approval: Partial<Record<SignableProfile, UiApprovalMode>> = {};
 
@@ -195,6 +198,17 @@ export class OpticalReceiveElement extends HTMLElement {
   }
 
   /**
+   * Disables the "empty trust list = trust any signature" permissive
+   * default. With this set, an unrecognized-but-validly-signed sender puts
+   * the receiver in the `unknown-sender` state and fires
+   * `oat-unknown-sender` instead of silently trusting or rejecting — see
+   * `trustSenderAndContinue()`/`rejectUnknownSender()`.
+   */
+  set requireExplicitTrust(value: boolean) {
+    this.#requireExplicitTrust = value;
+  }
+
+  /**
    * Per-profile signature requirement, independent of the `verify`/
    * `require-signature` attribute (which is a blanket, artifact-wide
    * requirement). `sandboxed-html` always requires a signature regardless
@@ -266,6 +280,33 @@ export class OpticalReceiveElement extends HTMLElement {
   /** Declines a pending `awaiting-consent` proposal without rendering it. */
   dismissProposal(reason = 'user-dismissed'): void {
     if (this.#state !== 'awaiting-consent') return;
+    this.#setState('rejected', { reason });
+    this.dispatchEvent(new CustomEvent('oat-rejected', { detail: { reasons: [reason] } }));
+  }
+
+  /**
+   * Confirms an `unknown-sender` prompt: adds the pending artifact's
+   * signer to the trust list and re-runs verification/delivery. No new
+   * frames need to be scanned — the artifact's signature already carried
+   * its own public key, which is the whole point of trust-on-first-use
+   * over this channel: the "key exchange" already happened as part of the
+   * normal scan.
+   */
+  trustSenderAndContinue(): void {
+    if (this.#state !== 'unknown-sender' || !this.#artifact?.signature) return;
+    const keyHex = toHex(this.#artifact.signature.publicKey);
+    if (!this.#trustedPublicKeysHex.includes(keyHex)) {
+      this.#trustedPublicKeysHex = [...this.#trustedPublicKeysHex, keyHex];
+    }
+    const artifact = this.#artifact;
+    const verification = this.#verifyArtifact(artifact);
+    this.#verification = verification;
+    this.#processVerification(artifact, verification);
+  }
+
+  /** Declines a pending `unknown-sender` prompt. */
+  rejectUnknownSender(reason = 'unknown-sender-declined'): void {
+    if (this.#state !== 'unknown-sender') return;
     this.#setState('rejected', { reason });
     this.dispatchEvent(new CustomEvent('oat-rejected', { detail: { reasons: [reason] } }));
   }
@@ -426,18 +467,45 @@ export class OpticalReceiveElement extends HTMLElement {
     }
     this.#artifact = artifact;
 
+    const verification = this.#verifyArtifact(artifact);
+    this.#verification = verification;
+    this.#processVerification(artifact, verification);
+  }
+
+  #verifyArtifact(artifact: OatArtifact): ReceiverVerificationResult {
     const acceptAttr = this.getAttribute('accept');
     const acceptMediaTypes = acceptAttr ? acceptAttr.split(',').map((s) => s.trim()).filter(Boolean) : undefined;
     const requireSignature = this.getAttribute('verify') === 'signature' || this.hasAttribute('require-signature');
 
-    const verification = verifyReceivedArtifact(artifact, {
+    return verifyReceivedArtifact(artifact, {
       requireSignature,
       acceptMediaTypes,
-      trustedPublicKeysHex: this.#trustedPublicKeysHex
+      trustedPublicKeysHex: this.#trustedPublicKeysHex,
+      requireExplicitTrust: this.#requireExplicitTrust
     });
-    this.#verification = verification;
+  }
 
+  /** `true` for a digest-valid, signature-valid, media-type-accepted artifact whose *signer* just isn't on the trust list yet. */
+  #isUnknownSender(verification: ReceiverVerificationResult): boolean {
+    return (
+      verification.digestValid &&
+      verification.signatureValid === true &&
+      verification.mediaTypeAccepted &&
+      !verification.senderTrusted
+    );
+  }
+
+  #processVerification(artifact: OatArtifact, verification: ReceiverVerificationResult): void {
     if (!verification.valid) {
+      if (this.#isUnknownSender(verification) && artifact.signature) {
+        this.#setState('unknown-sender');
+        this.dispatchEvent(
+          new CustomEvent('oat-unknown-sender', {
+            detail: { artifact, verification, publicKeyHex: toHex(artifact.signature.publicKey) }
+          })
+        );
+        return;
+      }
       this.#setState('rejected', { reasons: verification.reasons });
       this.dispatchEvent(new CustomEvent('oat-rejected', { detail: { verification } }));
       return;

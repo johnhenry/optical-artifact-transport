@@ -63,6 +63,15 @@ against the original design conversation (`docs/design.md`):
 - **Trusted Types** — a dedicated `oat-sandbox-srcdoc` policy so the M6
   iframe's `srcdoc` assignment keeps working under a host CSP with
   `require-trusted-types-for 'script'`.
+- **Trust-on-first-use (TOFU) key confirmation** — a signature already
+  carries the signer's public key inline, so no separate key-exchange step
+  is needed for cross-device use. With `requireExplicitTrust` set, a
+  digest-valid, signature-valid artifact from a key not yet on
+  `trustedPublicKeys` surfaces as a new `unknown-sender` receiver state
+  (`oat-unknown-sender` event) instead of silently trusting or rejecting it;
+  `trustSenderAndContinue()`/`rejectUnknownSender()` resolve it, and
+  `@oat/ui`'s `renderTrustPrompt()` renders the "confirm public key:
+  ..." fingerprint prompt the demo uses.
 
 ## Packages
 
