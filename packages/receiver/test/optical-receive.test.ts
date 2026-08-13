@@ -572,4 +572,70 @@ describe('<optical-receive> end-to-end (synthetic QR frames)', () => {
     expect(el.progress).toBe(0);
     expect(el.state).toBe('idle');
   });
+
+  it("setting the ui-policy attribute after construction is reactive (downgrades the next proposal) without any other setter being called", async () => {
+    const uiProposal: UiProposalEnvelope = {
+      type: 'ui.proposal',
+      version: 1,
+      proposalId: 'p-ui-policy',
+      origin: { id: 'sender-1' },
+      title: 'Import handoff',
+      preferredView: { kind: 'text', body: 'preferred' },
+      fallbackView: { kind: 'text', body: 'fallback' },
+      requestedCapabilities: [],
+      requestedProfile: 'safe-view'
+    };
+    const artifact = await buildArtifact({
+      mediaType: 'application/json',
+      payload: new TextEncoder().encode('{}'),
+      uiProposal
+    });
+    const envelopeBytes = encodeCanonical(artifact) as Uint8Array;
+    const frames = await renderFrames(envelopeBytes, 96, 40);
+
+    const el = mount();
+    el.setAttribute('ui-policy', 'none'); // no other setter is ever called on this element
+
+    for (const frame of frames) {
+      el.processFrame(frame);
+      if (el.state === 'downgraded') break;
+    }
+
+    expect(el.state).toBe('downgraded');
+    expect(el.uiDecision?.reasons).toContain('ui-policy-none');
+  });
+
+  it('autoApprove grants a capability without a capability prompt or approveCapabilities() call', async () => {
+    const uiProposal: UiProposalEnvelope = {
+      type: 'ui.proposal',
+      version: 1,
+      proposalId: 'p-auto-approve',
+      origin: { id: 'sender-1' },
+      title: 'Import handoff',
+      preferredView: { kind: 'text', body: 'preferred' },
+      fallbackView: { kind: 'text', body: 'fallback' },
+      requestedCapabilities: [{ capability: 'agent.session.import' }],
+      requestedProfile: 'safe-view'
+    };
+    const artifact = await buildArtifact({
+      mediaType: 'application/json',
+      payload: new TextEncoder().encode('{}'),
+      uiProposal
+    });
+    const envelopeBytes = encodeCanonical(artifact) as Uint8Array;
+    const frames = await renderFrames(envelopeBytes, 96, 40);
+
+    const el = mount();
+    el.capabilityPolicy = createCapabilityPolicy(['agent.session.import']);
+    el.autoApprove = ['agent.session.import']; // no approveCapabilities() call anywhere in this test
+
+    for (const frame of frames) {
+      el.processFrame(frame);
+      if (el.state === 'ui-proposed') break;
+    }
+
+    expect(el.state).toBe('ui-proposed');
+    expect(el.uiDecision?.outcome).toBe('accept-safe');
+    expect(el.uiDecision?.effectiveCapabilities).toEqual(['agent.session.import']);
+  });
 });
