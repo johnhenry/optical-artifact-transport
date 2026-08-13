@@ -121,7 +121,8 @@ function log(target: HTMLPreElement, ...parts: unknown[]): void {
 receiver.capabilityPolicy = createCapabilityPolicy([
   'agent.session.import',
   'ui.render.form.basic',
-  'ui.action.submit'
+  'ui.action.submit',
+  'calendar.event.create'
 ]);
 
 // M6 break-glass is opted into for this demo so the flow can actually be
@@ -263,6 +264,51 @@ $<HTMLButtonElement>('#prepare-btn').addEventListener('click', async () => {
     sender.source = file; // Blob — resolveSource() picks up file.type automatically
     await waitForPrepared(sender);
     sender.appendChild(proposalTemplate);
+    return;
+  }
+
+  if (payloadType === 'structured-form') {
+    sender.removeAttribute('verify'); // signs directly below, like unsafe-demo
+    // The 'form' safe-view kind is fully implemented (packages/ui's
+    // renderSafeView -> renderFormView) but nothing in this demo exercised
+    // it before now — the agent-handoff proposal above uses raw HTML
+    // through safe-html instead. This is a genuinely declarative form: no
+    // HTML at all, just typed fields the receiver renders itself.
+    const proposal: UiProposalEnvelope = {
+      type: 'ui.proposal',
+      version: 1,
+      proposalId: crypto.randomUUID(),
+      origin: { id: 'demo-sender', label: 'Structured-form demo sender' },
+      title: 'Schedule a follow-up',
+      summary: 'A declarative form — no HTML at all.',
+      preferredView: {
+        kind: 'form',
+        title: 'Schedule a follow-up',
+        schema: {
+          type: 'object',
+          properties: { title: { type: 'string' }, date: { type: 'string' } },
+          required: ['title', 'date']
+        },
+        fields: [
+          { name: 'title', label: 'Title', type: 'text', required: true, defaultValue: 'Follow up on handoff' },
+          { name: 'date', label: 'Date (YYYY-MM-DD)', type: 'text', required: true, defaultValue: '2026-08-20' }
+        ],
+        submitAction: 'calendar.event.create',
+        submitLabel: 'Add to calendar',
+        cancelLabel: 'No thanks'
+      },
+      fallbackView: { kind: 'text', body: 'This sender wanted to propose scheduling a calendar follow-up.' },
+      requestedCapabilities: [{ capability: 'calendar.event.create', reason: 'Add a calendar reminder for this handoff follow-up' }],
+      requestedProfile: 'safe-view'
+    };
+    const artifact = await buildArtifact({
+      mediaType: 'application/json',
+      payload: new TextEncoder().encode('{}'),
+      uiProposal: proposal,
+      sign: { secretKey: signingKey.secretKey, keyId: 'structured-form-key' }
+    });
+    log(senderLog, 'built structured-form (safe-view) demo artifact');
+    sender.sendArtifact(artifact);
     return;
   }
 
