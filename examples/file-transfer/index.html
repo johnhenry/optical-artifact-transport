@@ -93,9 +93,14 @@
         <button id="camera-btn" type="button">Start camera instead</button>
         <button id="reset-btn" type="button">Reset</button>
       </div>
-      <label class="checkbox">
-        <input type="checkbox" id="approval-toggle" />
-        Gate safe-html proposals behind an explicit confirm (approval: "prompt")
+      <label>
+        Receiver policy preset
+        <select id="policy-preset">
+          <option value="safe">Safe (default)</option>
+          <option value="strict">Strict — signatures + confirm everything</option>
+          <option value="permissive">Permissive — auto-approve, no confirm</option>
+          <option value="locked-down">Locked down — ignore all UI proposals</option>
+        </select>
       </label>
       <p class="hint">
         The first artifact from a new signing key pauses here for you to

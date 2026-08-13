@@ -83,7 +83,7 @@ const TEMPLATE = `
  */
 export class OpticalReceiveElement extends HTMLElement {
   static get observedAttributes(): string[] {
-    return ['controls'];
+    return ['controls', 'ui-policy'];
   }
 
   readonly #root: ShadowRoot;
@@ -103,6 +103,7 @@ export class OpticalReceiveElement extends HTMLElement {
   #requireExplicitTrust = false;
   #requireSignatureFor: SignableProfile[] = [];
   #approval: Partial<Record<SignableProfile, UiApprovalMode>> = {};
+  #autoApprove: string[] = [];
 
   #state: ReceiverState = 'idle';
   #timer: ReturnType<typeof setInterval> | null = null;
@@ -141,6 +142,12 @@ export class OpticalReceiveElement extends HTMLElement {
 
   attributeChangedCallback(name: string, _oldValue: string | null, newValue: string | null): void {
     if (name === 'controls') this.#controlsEl.hidden = newValue === null;
+    // Every other policy input is a JS property setter that rebuilds the
+    // engine on write; `ui-policy` is attribute-only (matching how it's
+    // typically set in markup), so it needs the same reactivity here —
+    // otherwise setting it after construction is silently ignored until
+    // some *other* setter happens to trigger a rebuild.
+    if (name === 'ui-policy') this.#rebuildPolicyEngine();
   }
 
   get state(): ReceiverState {
@@ -230,6 +237,16 @@ export class OpticalReceiveElement extends HTMLElement {
     this.#rebuildPolicyEngine();
   }
 
+  /**
+   * Capabilities granted without an explicit user gesture — passed straight
+   * through to `PolicyEngineOptions.autoApprove`. Keep this short: anything
+   * listed here skips the capability prompt entirely for a matching request.
+   */
+  set autoApprove(capabilities: readonly string[]) {
+    this.#autoApprove = [...capabilities];
+    this.#rebuildPolicyEngine();
+  }
+
   #rebuildPolicyEngine(): void {
     this.#policyEngine = new PolicyEngine({
       capabilityPolicy: this.#capabilityPolicy,
@@ -240,7 +257,8 @@ export class OpticalReceiveElement extends HTMLElement {
       // never be enough to run arbitrary sender script.
       allowUnsafeHtml: this.#allowUnsafeHtml && this.#trustedPublicKeysHex.length > 0,
       requireSignatureFor: this.#requireSignatureFor,
-      approval: this.#approval
+      approval: this.#approval,
+      autoApprove: this.#autoApprove
     });
   }
 

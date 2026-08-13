@@ -160,8 +160,44 @@ qrShare.addEventListener('toggle', () => {
   void QRCode.toCanvas($<HTMLCanvasElement>('#qr-share-canvas'), location.href, { width: 200, margin: 1 });
 });
 
-$<HTMLInputElement>('#approval-toggle').addEventListener('change', (e) => {
-  receiver.approvalPolicy = (e.target as HTMLInputElement).checked ? { 'safe-html': 'prompt' } : {};
+// --- Receiver policy presets --------------------------------------------
+// Demonstrates the granular per-profile ReceiverUiPolicy system (M4) live:
+// each preset touches ui-policy, requireSignatureFor, approvalPolicy, and
+// autoApprove together so switching actually changes end-to-end behavior,
+// not just one knob in isolation.
+const POLICY_PRESETS: Record<string, {
+  uiPolicy: 'safe' | 'none';
+  requireSignatureFor: ('safe-view' | 'safe-html')[];
+  approval: Partial<Record<'safe-view' | 'safe-html', 'automatic' | 'prompt' | 'prompt-with-warning'>>;
+  autoApprove: string[];
+}> = {
+  safe: { uiPolicy: 'safe', requireSignatureFor: [], approval: {}, autoApprove: [] },
+  strict: {
+    uiPolicy: 'safe',
+    requireSignatureFor: ['safe-view', 'safe-html'],
+    approval: { 'safe-view': 'prompt-with-warning', 'safe-html': 'prompt-with-warning' },
+    autoApprove: []
+  },
+  permissive: {
+    uiPolicy: 'safe',
+    requireSignatureFor: [],
+    approval: { 'safe-view': 'automatic', 'safe-html': 'automatic' },
+    autoApprove: ['agent.session.import', 'calendar.event.create']
+  },
+  'locked-down': { uiPolicy: 'none', requireSignatureFor: [], approval: {}, autoApprove: [] }
+};
+
+function applyPolicyPreset(name: string): void {
+  const preset = POLICY_PRESETS[name] ?? (POLICY_PRESETS.safe as NonNullable<(typeof POLICY_PRESETS)['safe']>);
+  receiver.setAttribute('ui-policy', preset.uiPolicy);
+  receiver.requireSignatureFor = preset.requireSignatureFor;
+  receiver.approvalPolicy = preset.approval;
+  receiver.autoApprove = preset.autoApprove;
+  log(receiverLog, 'policy preset applied:', name);
+}
+applyPolicyPreset('safe');
+$<HTMLSelectElement>('#policy-preset').addEventListener('change', (e) => {
+  applyPolicyPreset((e.target as HTMLSelectElement).value);
 });
 
 // --- Payload-type field visibility -------------------------------------
