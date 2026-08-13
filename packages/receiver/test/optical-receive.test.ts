@@ -47,6 +47,10 @@ function mount(): OpticalReceiveElement {
   return el;
 }
 
+function toHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 afterEach(() => {
   document.body.innerHTML = '';
 });
@@ -135,7 +139,7 @@ describe('<optical-receive> end-to-end (synthetic QR frames)', () => {
     expect(el.verification?.mediaTypeAccepted).toBe(false);
   });
 
-  it('computes a downgrade decision for a sandboxed-html UI proposal (M6 unsafe mode is out of scope)', async () => {
+  it('downgrades a sandboxed-html proposal by default (allowUnsafeHtml defaults closed)', async () => {
     const uiProposal: UiProposalEnvelope = {
       type: 'ui.proposal',
       version: 1,
@@ -147,10 +151,12 @@ describe('<optical-receive> end-to-end (synthetic QR frames)', () => {
       requestedCapabilities: [],
       requestedProfile: 'sandboxed-html'
     };
+    const { secretKey } = generateSigningKey();
     const artifact = await buildArtifact({
       mediaType: 'application/json',
       payload: new TextEncoder().encode('{}'),
-      uiProposal
+      uiProposal,
+      sign: { secretKey } // even a validly signed proposal must downgrade with the receiver's default policy
     });
     const envelopeBytes = encodeCanonical(artifact) as Uint8Array;
     const frames = await renderFrames(envelopeBytes, 96, 40);
@@ -166,7 +172,106 @@ describe('<optical-receive> end-to-end (synthetic QR frames)', () => {
 
     expect(el.state).toBe('downgraded');
     expect(el.uiDecision?.outcome).toBe('downgrade');
+    expect(el.uiDecision?.reasons).toContain('receiver-policy-disallows-unsafe-html');
     expect(proposalEvent).not.toBeNull();
+  });
+
+  it('still downgrades an unsigned sandboxed-html proposal even when allowUnsafeHtml is opted in', async () => {
+    const uiProposal: UiProposalEnvelope = {
+      type: 'ui.proposal',
+      version: 1,
+      proposalId: 'p1b',
+      origin: { id: 'sender-1' },
+      title: 'Untrusted UI',
+      preferredView: { kind: 'sandboxed-html', html: '<script>alert(1)</script>' },
+      fallbackView: { kind: 'text', body: 'fallback' },
+      requestedCapabilities: [],
+      requestedProfile: 'sandboxed-html'
+    };
+    const artifact = await buildArtifact({ mediaType: 'application/json', payload: new TextEncoder().encode('{}'), uiProposal });
+    const envelopeBytes = encodeCanonical(artifact) as Uint8Array;
+    const frames = await renderFrames(envelopeBytes, 96, 40);
+
+    const el = mount();
+    el.allowUnsafeHtml = true;
+
+    for (const frame of frames) {
+      el.processFrame(frame);
+      if (el.state === 'downgraded') break;
+    }
+
+    expect(el.state).toBe('downgraded');
+    expect(el.uiDecision?.reasons).toContain('signature-required');
+  });
+
+  it('reaches accept-unsafe only for a signed sandboxed-html proposal with allowUnsafeHtml opted in', async () => {
+    const uiProposal: UiProposalEnvelope = {
+      type: 'ui.proposal',
+      version: 1,
+      proposalId: 'p1c',
+      origin: { id: 'sender-1' },
+      title: 'Break glass demo',
+      preferredView: { kind: 'sandboxed-html', html: '<button>go</button>' },
+      fallbackView: { kind: 'text', body: 'fallback' },
+      requestedCapabilities: [],
+      requestedProfile: 'sandboxed-html'
+    };
+    const { secretKey, publicKey } = generateSigningKey();
+    const artifact = await buildArtifact({
+      mediaType: 'application/json',
+      payload: new TextEncoder().encode('{}'),
+      uiProposal,
+      sign: { secretKey }
+    });
+    const envelopeBytes = encodeCanonical(artifact) as Uint8Array;
+    const frames = await renderFrames(envelopeBytes, 96, 40);
+
+    const el = mount();
+    el.allowUnsafeHtml = true;
+    el.trustedPublicKeys = [toHex(publicKey)];
+
+    for (const frame of frames) {
+      el.processFrame(frame);
+      if (el.state === 'unsafe-proposed') break;
+    }
+
+    expect(el.state).toBe('unsafe-proposed');
+    expect(el.uiDecision?.outcome).toBe('accept-unsafe');
+    expect(el.uiDecision?.reasons).toEqual([]);
+  });
+
+  it('allowUnsafeHtml is inert without a configured trust list, even for a validly signed proposal', async () => {
+    const uiProposal: UiProposalEnvelope = {
+      type: 'ui.proposal',
+      version: 1,
+      proposalId: 'p1d',
+      origin: { id: 'sender-1' },
+      title: 'Break glass demo',
+      preferredView: { kind: 'sandboxed-html', html: '<button>go</button>' },
+      fallbackView: { kind: 'text', body: 'fallback' },
+      requestedCapabilities: [],
+      requestedProfile: 'sandboxed-html'
+    };
+    const { secretKey } = generateSigningKey();
+    const artifact = await buildArtifact({
+      mediaType: 'application/json',
+      payload: new TextEncoder().encode('{}'),
+      uiProposal,
+      sign: { secretKey }
+    });
+    const envelopeBytes = encodeCanonical(artifact) as Uint8Array;
+    const frames = await renderFrames(envelopeBytes, 96, 40);
+
+    const el = mount();
+    el.allowUnsafeHtml = true; // opted in, but trustedPublicKeys was never set
+
+    for (const frame of frames) {
+      el.processFrame(frame);
+      if (el.state === 'downgraded') break;
+    }
+
+    expect(el.state).toBe('downgraded');
+    expect(el.uiDecision?.outcome).toBe('downgrade');
   });
 
   it('computes accept-safe with granted capabilities intersecting policy and user approval', async () => {

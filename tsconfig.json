@@ -6,6 +6,7 @@
     { "path": "packages/sim" },
     { "path": "packages/sender" },
     { "path": "packages/receiver" },
-    { "path": "packages/ui" }
+    { "path": "packages/ui" },
+    { "path": "packages/bootstrap" }
   ]
 }

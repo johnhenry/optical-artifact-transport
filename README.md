@@ -17,8 +17,7 @@ throughput.
 
 ## Status
 
-First implementation pass, scoped to milestones M0–M4 from the design doc
-(`docs/design.md`):
+Implements the full M0–M6 milestone set from the design doc (`docs/design.md`):
 
 - **M0** — protocol spec: artifact envelope, capability registry, UI proposal
   grammar.
@@ -28,22 +27,32 @@ First implementation pass, scoped to milestones M0–M4 from the design doc
 - **M3** — `<optical-receive>` MVP.
 - **M4** — safe UI: sanitization profiles, declarative forms/actions,
   capability-gated rendering.
-
-M5 (bootstrap workflows: WebRTC/BitTorrent/release-manifest examples) and M6
-(unsafe-HTML sandboxed iframe profile) are **out of scope** for this pass.
+- **M5** — bootstrap workflows: a small signed optical artifact unlocks a
+  faster follow-on transport. Implemented: a verified release-manifest fetch
+  (digest-checked, mirror-fallback HTTPS download) and a real WebRTC
+  offer/answer exchange (genuine `RTCPeerConnection`, live data channel).
+  BitTorrent/content-addressed bootstrap is not implemented — the pattern
+  generalizes to it, but it wasn't built.
+- **M6** — unsafe-HTML break-glass profile: a `sandbox="allow-scripts"`
+  iframe (no `allow-same-origin`/`allow-forms`/`allow-popups`/
+  `allow-downloads`/`allow-top-navigation`), a typed/rate-limited postMessage
+  bridge, a high-visibility opt-in prompt, and a persistent kill switch. Only
+  reachable for a signed artifact from an explicitly trusted sender, with the
+  receiver deployment separately opting in — see Security model below.
 
 ## Packages
 
 ```
 packages/
-  protocol/            artifact envelope, canonical CBOR, digest, ed25519 signatures, capabilities, UI proposal types
+  protocol/            artifact envelope, canonical CBOR, digest, ed25519 signatures, capabilities, UI proposal types, M6 sandbox eligibility
   codecs/qr-fountain/  LT fountain encoder/decoder + QR frame render/decode
   sim/                 transport simulator (loss/dup/reorder/corruption)
   sender/              <optical-send> custom element
   receiver/            <optical-receive> custom element
-  ui/                  safe-view/safe-html rendering, sanitizer, capability policy engine
+  ui/                  safe-view/safe-html rendering, sanitizer, capability policy engine, M6 sandbox host + iframe bridge
+  bootstrap/           M5 bootstrap workflows: release-manifest fetch+verify, WebRTC offer/answer
 examples/
-  file-transfer/       live demo wiring sender + receiver together
+  file-transfer/       live demo wiring sender + receiver together, including M5/M6 flows
 ```
 
 ## Development
@@ -61,11 +70,29 @@ npm run dev:demo   # examples/file-transfer on localhost
   receiver never delivers unverified bytes to the host app.
 - A sender may *propose* a UI (`UiProposalEnvelope`), but the receiver always
   owns rendering. Outcomes are: reject, downgrade to fallback, accept-safe
-  (sanitized, receiver-rendered), or accept-unsafe (out of scope here — see
-  M6 in the design doc).
+  (sanitized, receiver-rendered), or accept-unsafe (M6 break-glass — see
+  below).
 - Effective capabilities are always
   `sender requested ∩ receiver policy ∩ user-approved grants`. Rendering is
   never authority — declarative actions only carry typed, receiver-mediated
   requests, never remote code or DOM handles.
+- **M6 unsafe-HTML eligibility** (`checkSandboxEligibility`) requires *all*
+  of: a verified signature, the signer being on the receiver's explicit
+  `trustedPublicKeys` list (a valid signature alone only proves *some* key
+  signed it — anyone can generate one), and the receiver deployment setting
+  `allowUnsafeHtml`. Any one of these missing downgrades to the fallback
+  view instead. The mounted iframe's sandbox tokens don't gate
+  self-navigation (a known limitation of the iframe sandbox model); the host
+  detects it out-of-band (a second `load` event after the initial `srcdoc`
+  render) and tears the frame down immediately rather than let it run with
+  an un-enforced CSP.
+- **M5 bootstrap functions** (`extractReleaseManifest`,
+  `extractWebrtcBootstrapPayload`, and the `createAnswerArtifact`/
+  `applyAnswerArtifact` that call it) refuse to run on anything without an
+  affirmatively verified signature — these trigger real side effects (an
+  HTTP fetch, applying WebRTC session data), so they enforce this
+  themselves rather than trusting every caller to check first. Release-manifest
+  URLs are additionally restricted to `https:` by default
+  (`allowedUrlSchemes`) as an SSRF guard, mirroring `@oat/ui`'s sanitizer.
 
 See `docs/design.md` for the full PRD this implementation follows.

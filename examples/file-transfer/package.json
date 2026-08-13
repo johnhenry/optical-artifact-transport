@@ -14,7 +14,8 @@
     "@oat/qr-fountain": "*",
     "@oat/sender": "*",
     "@oat/receiver": "*",
-    "@oat/ui": "*"
+    "@oat/ui": "*",
+    "@oat/bootstrap": "*"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

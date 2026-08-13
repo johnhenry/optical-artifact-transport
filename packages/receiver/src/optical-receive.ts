@@ -19,6 +19,7 @@ export type ReceiverState =
   | 'verifying'
   | 'accepted'
   | 'ui-proposed'
+  | 'unsafe-proposed'
   | 'downgraded'
   | 'rejected'
   | 'error';
@@ -31,6 +32,7 @@ const DISPLAY_BUCKET: Record<ReceiverState, 'empty' | 'scanning' | 'verifying' |
   verifying: 'verifying',
   accepted: 'complete',
   'ui-proposed': 'complete',
+  'unsafe-proposed': 'complete',
   downgraded: 'complete',
   rejected: 'rejected',
   error: 'error'
@@ -87,6 +89,9 @@ export class OpticalReceiveElement extends HTMLElement {
   readonly #decodeWorker: DecodeWorker;
   readonly #packetStore = new PacketStore();
   #policyEngine: PolicyEngine;
+  #capabilityPolicy: CapabilityPolicy = createCapabilityPolicy([]);
+  #allowUnsafeHtml = false;
+  #trustedPublicKeysHex: string[] = [];
 
   #state: ReceiverState = 'idle';
   #timer: ReturnType<typeof setInterval> | null = null;
@@ -111,7 +116,7 @@ export class OpticalReceiveElement extends HTMLElement {
 
     this.#camera = createCameraController();
     this.#decodeWorker = createInlineDecodeWorker();
-    this.#policyEngine = new PolicyEngine({ capabilityPolicy: createCapabilityPolicy([]) });
+    this.#policyEngine = new PolicyEngine({ capabilityPolicy: this.#capabilityPolicy, allowUnsafeHtml: this.#allowUnsafeHtml });
     this.#updateSlotVisibility();
   }
 
@@ -154,9 +159,42 @@ export class OpticalReceiveElement extends HTMLElement {
 
   /** Overrides the default (fully permissive-deny) capability policy. */
   set capabilityPolicy(policy: CapabilityPolicy) {
+    this.#capabilityPolicy = policy;
+    this.#rebuildPolicyEngine();
+  }
+
+  /**
+   * M6 break-glass opt-in. Defaults `false`: even a fully-eligible
+   * `sandboxed-html` proposal (valid signature, etc.) is downgraded unless
+   * this is explicitly set `true`.
+   */
+  set allowUnsafeHtml(value: boolean) {
+    this.#allowUnsafeHtml = value;
+    this.#rebuildPolicyEngine();
+  }
+
+  /**
+   * Hex-encoded Ed25519 public keys this receiver trusts as senders. A
+   * *signature* only proves content wasn't tampered with in transit —
+   * anyone can generate their own keypair — so this list is what actually
+   * answers "identity verified" for anything security-sensitive,
+   * particularly the M6 unsafe-HTML tier (`allowUnsafeHtml` alone is inert
+   * for a sender not on this list; see `checkSandboxEligibility`).
+   */
+  set trustedPublicKeys(keysHex: readonly string[]) {
+    this.#trustedPublicKeysHex = [...keysHex];
+    this.#rebuildPolicyEngine();
+  }
+
+  #rebuildPolicyEngine(): void {
     this.#policyEngine = new PolicyEngine({
-      capabilityPolicy: policy,
-      uiPolicy: (this.getAttribute('ui-policy') as 'safe' | 'none' | null) ?? undefined
+      capabilityPolicy: this.#capabilityPolicy,
+      uiPolicy: (this.getAttribute('ui-policy') as 'safe' | 'none' | null) ?? undefined,
+      // A signature alone proves content wasn't tampered with, not who sent
+      // it — anyone can generate a keypair. So allowUnsafeHtml is inert
+      // without a non-empty trust list: flipping the opt-in alone must
+      // never be enough to run arbitrary sender script.
+      allowUnsafeHtml: this.#allowUnsafeHtml && this.#trustedPublicKeysHex.length > 0
     });
   }
 
@@ -171,6 +209,11 @@ export class OpticalReceiveElement extends HTMLElement {
       );
     }
     return this.#uiDecision;
+  }
+
+  /** Checks one capability against this receiver's policy — used by the M6 sandbox bridge to mediate each request individually. */
+  checkCapability(capability: string): boolean {
+    return this.#policyEngine.checkCapability(capability, this.#userApprovedCapabilities);
   }
 
   #setState(state: ReceiverState, detail?: Record<string, unknown>): void {
@@ -288,7 +331,11 @@ export class OpticalReceiveElement extends HTMLElement {
     const acceptMediaTypes = acceptAttr ? acceptAttr.split(',').map((s) => s.trim()).filter(Boolean) : undefined;
     const requireSignature = this.getAttribute('verify') === 'signature' || this.hasAttribute('require-signature');
 
-    const verification = verifyReceivedArtifact(artifact, { requireSignature, acceptMediaTypes });
+    const verification = verifyReceivedArtifact(artifact, {
+      requireSignature,
+      acceptMediaTypes,
+      trustedPublicKeysHex: this.#trustedPublicKeysHex
+    });
     this.#verification = verification;
 
     if (!verification.valid) {
@@ -300,7 +347,9 @@ export class OpticalReceiveElement extends HTMLElement {
     if (artifact.uiProposal) {
       const decision = this.#policyEngine.decideUi(artifact.uiProposal, verification, this.#userApprovedCapabilities);
       this.#uiDecision = decision;
-      this.#setState(decision.outcome === 'downgrade' ? 'downgraded' : 'ui-proposed');
+      const nextState: ReceiverState =
+        decision.outcome === 'downgrade' ? 'downgraded' : decision.outcome === 'accept-unsafe' ? 'unsafe-proposed' : 'ui-proposed';
+      this.#setState(nextState);
       this.dispatchEvent(
         new CustomEvent('oat-ui-proposal', { detail: { proposal: artifact.uiProposal, decision, artifact } })
       );

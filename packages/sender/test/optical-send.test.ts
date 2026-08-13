@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { verifyArtifact, generateSigningKey, decodeCanonical, isOatArtifact } from '@oat/protocol';
+import { verifyArtifact, generateSigningKey, decodeCanonical, isOatArtifact, buildArtifact } from '@oat/protocol';
 import { defineOpticalSend, OpticalSendElement } from '../src/optical-send.js';
 
 /**
@@ -121,6 +121,26 @@ describe('<optical-send> artifact preparation', () => {
     const bytes = encodeCanonical(el.artifact) as Uint8Array;
     const decoded = decodeCanonical(bytes);
     expect(isOatArtifact(decoded)).toBe(true);
+  });
+});
+
+describe('<optical-send>.sendArtifact()', () => {
+  it('transmits a pre-built artifact directly, bypassing envelope construction', async () => {
+    const el = mount('');
+    const prebuilt = await buildArtifact({
+      mediaType: 'application/vnd.oat.release-manifest+json',
+      payload: new TextEncoder().encode('{"hello":"bootstrap"}')
+    });
+
+    const readyEvent = new Promise<CustomEvent>((resolve) =>
+      el.addEventListener('oat-manifest-ready', (e) => resolve(e as CustomEvent), { once: true })
+    );
+    el.sendArtifact(prebuilt);
+    const evt = await readyEvent;
+
+    expect(el.state).toBe('manifest-ready');
+    expect(el.artifact).toBe(prebuilt);
+    expect(evt.detail.artifact.id).toBe(prebuilt.id);
   });
 });
 

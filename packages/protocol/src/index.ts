@@ -6,3 +6,4 @@ export * from './digest.js';
 export * from './signatures.js';
 export * from './compression.js';
 export * from './manifest.js';
+export * from './sandbox-eligibility.js';

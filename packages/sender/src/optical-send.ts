@@ -175,7 +175,7 @@ export class OpticalSendElement extends HTMLElement {
         throw new Error('optical-send: verify="signature" requires a signingKey to be set before prepare()');
       }
 
-      this.#artifact = await buildSenderArtifact({
+      const artifact = await buildSenderArtifact({
         mediaType: resolved.mediaType ?? 'application/octet-stream',
         payload: resolved.bytes,
         compression,
@@ -184,25 +184,46 @@ export class OpticalSendElement extends HTMLElement {
         metadata: this.#metadata
       });
 
-      const envelopeBytes = encodeCanonical(this.#artifact) as Uint8Array;
-      const artifactId = computeDigest(new TextEncoder().encode(this.#artifact.id)).value.slice(0, 16);
-
-      this.#fountainSource = prepareSource(envelopeBytes, this.blockSize, artifactId);
-      this.#packetGenerator = generatePackets(this.#fountainSource);
-      this.#framesSent = 0;
-
-      this.#setState('manifest-ready', {
-        artifactId: this.#artifact.id,
-        blockCount: this.#fountainSource.sourceBlockCount,
-        byteLength: envelopeBytes.length
-      });
-      this.dispatchEvent(new CustomEvent('oat-manifest-ready', { detail: { artifact: this.#artifact } }));
-
-      if (this.hasAttribute('autostart')) this.start();
+      this.#finalizeArtifact(artifact);
     } catch (err) {
       this.#setState('error', { error: (err as Error).message });
       this.dispatchEvent(new CustomEvent('oat-error', { detail: { error: err } }));
     }
+  }
+
+  /**
+   * Transmits an already-built `OatArtifact` directly, bypassing envelope
+   * construction — for callers (e.g. `@oat/bootstrap`) that build their own
+   * signed artifact (a release manifest, a WebRTC offer/answer, ...) and
+   * just need it fountain-encoded and rendered as QR frames.
+   */
+  sendArtifact(artifact: OatArtifact): void {
+    this.#setState('preparing');
+    try {
+      this.#finalizeArtifact(artifact);
+    } catch (err) {
+      this.#setState('error', { error: (err as Error).message });
+      this.dispatchEvent(new CustomEvent('oat-error', { detail: { error: err } }));
+    }
+  }
+
+  #finalizeArtifact(artifact: OatArtifact): void {
+    this.#artifact = artifact;
+    const envelopeBytes = encodeCanonical(artifact) as Uint8Array;
+    const artifactId = computeDigest(new TextEncoder().encode(artifact.id)).value.slice(0, 16);
+
+    this.#fountainSource = prepareSource(envelopeBytes, this.blockSize, artifactId);
+    this.#packetGenerator = generatePackets(this.#fountainSource);
+    this.#framesSent = 0;
+
+    this.#setState('manifest-ready', {
+      artifactId: artifact.id,
+      blockCount: this.#fountainSource.sourceBlockCount,
+      byteLength: envelopeBytes.length
+    });
+    this.dispatchEvent(new CustomEvent('oat-manifest-ready', { detail: { artifact } }));
+
+    if (this.hasAttribute('autostart')) this.start();
   }
 
   /** Starts (or resumes) rendering animated QR frames to the canvas. */

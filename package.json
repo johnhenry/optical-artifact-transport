@@ -11,6 +11,7 @@
     "packages/sender",
     "packages/receiver",
     "packages/ui",
+    "packages/bootstrap",
     "examples/file-transfer"
   ],
   "scripts": {

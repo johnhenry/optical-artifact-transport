@@ -1,0 +1,5 @@
+This is a stand-in "release artifact" served statically by the demo app.
+In real use this would be a build output (binary, tarball, container image,
+etc.) hosted on a CDN or object store. The optical channel only ever carries
+the small signed manifest that points at this file and pins its digest —
+the actual bytes always travel over ordinary HTTPS.
