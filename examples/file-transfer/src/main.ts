@@ -39,6 +39,49 @@ const capabilityHost = $<HTMLDivElement>('#capability-host');
 const trustHost = $<HTMLDivElement>('#trust-host');
 const proposalTemplate = sender.querySelector('template[slot="proposal"]') as HTMLTemplateElement;
 const payloadTypeSelect = $<HTMLSelectElement>('#payload-type');
+const resultMedia = $<HTMLDivElement>('#result-media');
+
+// The library imposes no size cap (see @oat/qr-fountain) — this demo's own
+// guard exists because the effective throughput over 200-byte QR frames at
+// 12fps, after the fountain code's ~30% redundancy overhead, is only about
+// 700 KB/min: technically "works" well past this, but stops being a demo.
+const MAX_FILE_BYTES = 300_000;
+const WARN_FILE_BYTES = 20_000;
+let lastResultObjectUrl: string | null = null;
+
+function revokeLastResultObjectUrl(): void {
+  if (lastResultObjectUrl) {
+    URL.revokeObjectURL(lastResultObjectUrl);
+    lastResultObjectUrl = null;
+  }
+}
+
+function estimateTransferSeconds(bytes: number): number {
+  const frames = Math.ceil(Math.ceil(bytes / 200) * 1.3);
+  return Math.ceil(frames / 12);
+}
+
+/**
+ * `sender.source = value` kicks off `prepare()` (which reads the light-DOM
+ * proposal <template>) asynchronously and un-awaitably — removing the
+ * template and synchronously re-appending it right after setting `source`
+ * does NOT reliably exclude it, since `resolveSource()`'s first `await`
+ * yields for only one microtask tick, same as the synchronous re-append.
+ * Waiting for the resulting `oat-manifest-ready`/`oat-error` guarantees
+ * `buildUiProposal()` has already run (or errored) before the template is
+ * restored.
+ */
+function waitForPrepared(el: OpticalSendElement): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      el.removeEventListener('oat-manifest-ready', done);
+      el.removeEventListener('oat-error', done);
+      resolve();
+    };
+    el.addEventListener('oat-manifest-ready', done, { once: true });
+    el.addEventListener('oat-error', done, { once: true });
+  });
+}
 
 // Deliberately adversarial content for the M6 break-glass demo: it tries to
 // read the parent document (must throw — the sandbox has no allow-same-origin,
@@ -124,11 +167,31 @@ $<HTMLInputElement>('#approval-toggle').addEventListener('change', (e) => {
 
 function updateFieldVisibility(): void {
   const isMessage = payloadTypeSelect.value === 'message';
+  const isFile = payloadTypeSelect.value === 'file';
   $<HTMLElement>('#message-field').hidden = !isMessage;
   $<HTMLElement>('#proposal-field').hidden = !isMessage;
+  $<HTMLElement>('#file-field').hidden = !isFile;
+  $<HTMLElement>('#file-estimate').hidden = !isFile;
 }
 payloadTypeSelect.addEventListener('change', updateFieldVisibility);
 updateFieldVisibility();
+
+const fileEstimateEl = $<HTMLElement>('#file-estimate');
+$<HTMLInputElement>('#file-input').addEventListener('change', (e) => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) {
+    fileEstimateEl.textContent = '';
+    return;
+  }
+  const seconds = estimateTransferSeconds(file.size);
+  if (file.size > MAX_FILE_BYTES) {
+    fileEstimateEl.textContent = `${file.name} is ${Math.round(file.size / 1000)} KB — too large for this demo (limit 300 KB, ~700 KB/min over this channel). Pick a smaller file.`;
+  } else if (file.size > WARN_FILE_BYTES) {
+    fileEstimateEl.textContent = `${file.name} — ${Math.round(file.size / 1000)} KB, ~${seconds}s to transfer at the default frame rate.`;
+  } else {
+    fileEstimateEl.textContent = `${file.name} — ${file.size} bytes, ~${seconds}s to transfer.`;
+  }
+});
 
 // --- M5 bootstrap state: fresh RTCPeerConnections per WebRTC-offer demo run
 
@@ -167,6 +230,41 @@ $<HTMLButtonElement>('#prepare-btn').addEventListener('click', async () => {
   // artifact directly and hand it to sender.sendArtifact() — sender.signingKey
   // only matters for the 'message' path below, which builds through
   // sender.source, so it's set there based on the sign-toggle checkbox.
+
+  if (payloadType === 'file') {
+    const file = $<HTMLInputElement>('#file-input').files?.[0];
+    if (!file) {
+      log(senderLog, 'no file selected');
+      return;
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      log(senderLog, 'file too large for this demo:', file.size, 'bytes');
+      return;
+    }
+    const sign = $<HTMLInputElement>('#sign-toggle').checked;
+    if (sign) {
+      sender.signingKey = signingKey;
+      sender.setAttribute('verify', 'signature');
+    } else {
+      sender.signingKey = null;
+      sender.removeAttribute('verify');
+    }
+    // A raw file transfer proposes no UI — detach the agent-handoff
+    // <template> (always present in the sender's light DOM) so
+    // buildUiProposal() doesn't attach it to an unrelated artifact. Waits
+    // for prepare() to actually finish reading the template before
+    // restoring it — see waitForPrepared().
+    proposalTemplate.remove();
+    // Tags the artifact so the receiver can distinguish "this came from the
+    // file input" from any other mediaType-alike artifact (e.g. the JSON
+    // placeholder payload the unsafe-demo/structured-form proposals carry) —
+    // more robust than inferring it from mediaType alone.
+    sender.metadata = { oatDemoKind: 'file' };
+    sender.source = file; // Blob — resolveSource() picks up file.type automatically
+    await waitForPrepared(sender);
+    sender.appendChild(proposalTemplate);
+    return;
+  }
 
   if (payloadType === 'release-manifest') {
     sender.removeAttribute('verify'); // buildReleaseManifestArtifact signs directly below
@@ -240,10 +338,15 @@ $<HTMLButtonElement>('#prepare-btn').addEventListener('click', async () => {
   }
 
   // The proposal <template> is only read at prepare()-time, so toggling it
-  // off just means temporarily detaching it before setting `source`.
+  // off just means temporarily detaching it before setting `source` and
+  // waiting for prepare() to actually finish reading it — see waitForPrepared().
   if (!includeProposal) proposalTemplate.remove();
+  sender.metadata = undefined; // clear any oatDemoKind left over from a prior file send
   sender.source = message;
-  if (!includeProposal) sender.appendChild(proposalTemplate);
+  if (!includeProposal) {
+    await waitForPrepared(sender);
+    sender.appendChild(proposalTemplate);
+  }
 });
 
 sender.addEventListener('oat-manifest-ready', ((e: CustomEvent) => {
@@ -283,6 +386,9 @@ $<HTMLButtonElement>('#reset-btn').addEventListener('click', () => {
   proposalHost.replaceChildren();
   capabilityHost.replaceChildren();
   trustHost.replaceChildren();
+  resultMedia.replaceChildren();
+  revokeLastResultObjectUrl();
+  resultEl.hidden = false;
   resultEl.textContent = '(nothing received yet)';
 });
 
@@ -383,6 +489,31 @@ receiver.addEventListener('oat-artifact', (async (e: CustomEvent) => {
   }
 
   const bytes = await extractPayload(artifact);
+
+  // Tagged by the sender's #prepare-btn 'file' branch (see sender.metadata
+  // above) — distinguishes a real file transfer from any other artifact that
+  // happens to share a mediaType (e.g. the JSON placeholder payload the
+  // unsafe-demo/structured-form proposals carry).
+  if (artifact.metadata?.oatDemoKind === 'file') {
+    revokeLastResultObjectUrl();
+    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: artifact.mediaType || 'application/octet-stream' }));
+    lastResultObjectUrl = url;
+    resultEl.hidden = true;
+    if (artifact.mediaType.startsWith('image/')) {
+      resultMedia.replaceChildren(Object.assign(new Image(), { src: url, alt: 'Received file' }));
+    } else {
+      const link = Object.assign(document.createElement('a'), {
+        href: url,
+        download: 'received-file',
+        textContent: `Download received file (${bytes.length} bytes, ${artifact.mediaType})`
+      });
+      resultMedia.replaceChildren(link);
+    }
+    return;
+  }
+
+  resultEl.hidden = false;
+  resultMedia.replaceChildren();
   resultEl.textContent = new TextDecoder().decode(bytes);
 }) as unknown as EventListener);
 
