@@ -27,7 +27,13 @@ describe('PolicyEngine.decideUi', () => {
   it('rejects when verification failed, regardless of the proposal', () => {
     const engine = new PolicyEngine({ capabilityPolicy: createCapabilityPolicy([]) });
     const result = engine.decideUi(proposal(), verified({ valid: false, digestValid: false, reasons: ['digest-mismatch'] }));
-    expect(result).toEqual({ outcome: 'reject', reasons: ['digest-mismatch'], effectiveCapabilities: [] });
+    expect(result).toEqual({
+      outcome: 'reject',
+      reasons: ['digest-mismatch'],
+      effectiveCapabilities: [],
+      approvalMode: 'automatic',
+      requiresExplicitApproval: false
+    });
   });
 
   it("downgrades everything when uiPolicy is 'none'", () => {
@@ -73,7 +79,13 @@ describe('PolicyEngine.decideUi', () => {
       proposal({ requestedProfile: 'sandboxed-html', preferredView: { kind: 'sandboxed-html', html: '<p>x</p>' } }),
       verified({ signatureValid: true })
     );
-    expect(result).toEqual({ outcome: 'accept-unsafe', reasons: [], effectiveCapabilities: [] });
+    expect(result).toEqual({
+      outcome: 'accept-unsafe',
+      reasons: [],
+      effectiveCapabilities: [],
+      approvalMode: 'prompt-with-warning',
+      requiresExplicitApproval: true
+    });
   });
 
   it('accept-unsafe never pre-grants capabilities — the sandbox bridge mediates each request individually', () => {
@@ -102,6 +114,67 @@ describe('PolicyEngine.decideUi', () => {
     );
     expect(result.outcome).toBe('accept-safe');
     expect(result.effectiveCapabilities.sort()).toEqual(['a', 'b']);
+  });
+
+  it('accept-safe defaults to automatic approval with no explicit gate', () => {
+    const engine = new PolicyEngine({ capabilityPolicy: createCapabilityPolicy([]) });
+    const result = engine.decideUi(proposal(), verified());
+    expect(result.approvalMode).toBe('automatic');
+    expect(result.requiresExplicitApproval).toBe(false);
+  });
+
+  it('honors a per-profile approval mode for safe-html', () => {
+    const engine = new PolicyEngine({
+      capabilityPolicy: createCapabilityPolicy([]),
+      approval: { 'safe-html': 'prompt' }
+    });
+    const result = engine.decideUi(
+      proposal({ requestedProfile: 'safe-html', preferredView: { kind: 'safe-html', html: '<p>x</p>', sanitizationProfile: 'strict' } }),
+      verified()
+    );
+    expect(result.outcome).toBe('accept-safe');
+    expect(result.approvalMode).toBe('prompt');
+    expect(result.requiresExplicitApproval).toBe(true);
+  });
+
+  it('a safe-view profile is unaffected by a safe-html-only approval override', () => {
+    const engine = new PolicyEngine({
+      capabilityPolicy: createCapabilityPolicy([]),
+      approval: { 'safe-html': 'prompt' }
+    });
+    const result = engine.decideUi(proposal({ requestedProfile: 'safe-view' }), verified());
+    expect(result.approvalMode).toBe('automatic');
+  });
+
+  it('requireSignatureFor downgrades an unsigned safe-view proposal even though safe-view normally needs no signature', () => {
+    const engine = new PolicyEngine({
+      capabilityPolicy: createCapabilityPolicy([]),
+      requireSignatureFor: ['safe-view']
+    });
+    const result = engine.decideUi(proposal(), verified({ signatureValid: 'absent' }));
+    expect(result.outcome).toBe('downgrade');
+    expect(result.reasons).toContain('signature-required-for-profile');
+  });
+
+  it('requireSignatureFor accepts a signed proposal for the configured profile', () => {
+    const engine = new PolicyEngine({
+      capabilityPolicy: createCapabilityPolicy([]),
+      requireSignatureFor: ['safe-html']
+    });
+    const result = engine.decideUi(
+      proposal({ requestedProfile: 'safe-html', preferredView: { kind: 'safe-html', html: '<p>x</p>', sanitizationProfile: 'strict' } }),
+      verified({ signatureValid: true })
+    );
+    expect(result.outcome).toBe('accept-safe');
+  });
+
+  it('requireSignatureFor does not affect a profile not listed', () => {
+    const engine = new PolicyEngine({
+      capabilityPolicy: createCapabilityPolicy([]),
+      requireSignatureFor: ['safe-html']
+    });
+    const result = engine.decideUi(proposal({ requestedProfile: 'safe-view' }), verified({ signatureValid: 'absent' }));
+    expect(result.outcome).toBe('accept-safe');
   });
 });
 

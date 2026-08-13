@@ -306,6 +306,127 @@ describe('<optical-receive> end-to-end (synthetic QR frames)', () => {
     expect(el.state).toBe('ui-proposed');
     expect(el.uiDecision?.outcome).toBe('accept-safe');
     expect(el.uiDecision?.effectiveCapabilities).toEqual(['agent.session.import']);
+
+    const { verifyArtifact, extractUiDecision } = await import('@oat/protocol');
+    const { secretKey } = generateSigningKey();
+    const decisionArtifact = await el.buildDecisionArtifact({ secretKey, keyId: 'receiver-key' });
+    const decisionVerification = verifyArtifact(decisionArtifact, { requireSignature: true });
+    const decision = await extractUiDecision(decisionArtifact, decisionVerification);
+
+    expect(decision).toMatchObject({
+      type: 'ui.decision',
+      proposalId: 'p2',
+      status: 'accepted',
+      profile: 'safe-html',
+      grantedCapabilities: ['agent.session.import'],
+      sanitized: true,
+      fallbackUsed: false
+    });
+    expect(decision.deniedCapabilities).toEqual([{ capability: 'html.script', reason: 'not granted by receiver policy' }]);
+    expect(decision.capabilityToken).toBeTruthy();
+  });
+
+  it('buildDecisionArtifact() throws when there is no pending UI decision', async () => {
+    const el = mount();
+    await expect(el.buildDecisionArtifact()).rejects.toThrow(/no pending UI decision/);
+  });
+
+  it("an accept-safe decision with approvalMode 'prompt' withholds oat-ui-proposal until confirmProposal()", async () => {
+    const uiProposal: UiProposalEnvelope = {
+      type: 'ui.proposal',
+      version: 1,
+      proposalId: 'p3',
+      origin: { id: 'sender-1' },
+      title: 'Gated proposal',
+      preferredView: { kind: 'text', body: 'gated content' },
+      fallbackView: { kind: 'text', body: 'fallback' },
+      requestedCapabilities: [],
+      requestedProfile: 'safe-view'
+    };
+    const artifact = await buildArtifact({ mediaType: 'application/json', payload: new TextEncoder().encode('{}'), uiProposal });
+    const envelopeBytes = encodeCanonical(artifact) as Uint8Array;
+    const frames = await renderFrames(envelopeBytes, 96, 40);
+
+    const el = mount();
+    el.approvalPolicy = { 'safe-view': 'prompt' };
+
+    let proposalFired = false;
+    el.addEventListener('oat-ui-proposal', () => (proposalFired = true));
+    let consentRequired: CustomEvent | null = null;
+    el.addEventListener('oat-consent-required', (e) => (consentRequired = e as CustomEvent));
+
+    for (const frame of frames) {
+      el.processFrame(frame);
+      if (el.state === 'awaiting-consent') break;
+    }
+
+    expect(el.state).toBe('awaiting-consent');
+    expect(proposalFired).toBe(false);
+    expect(consentRequired).not.toBeNull();
+    expect(el.uiDecision?.approvalMode).toBe('prompt');
+
+    el.confirmProposal();
+    expect(el.state).toBe('ui-proposed');
+    expect(proposalFired).toBe(true);
+  });
+
+  it('dismissProposal() rejects a pending awaiting-consent proposal without ever emitting oat-ui-proposal', async () => {
+    const uiProposal: UiProposalEnvelope = {
+      type: 'ui.proposal',
+      version: 1,
+      proposalId: 'p4',
+      origin: { id: 'sender-1' },
+      title: 'Gated proposal',
+      preferredView: { kind: 'text', body: 'gated content' },
+      fallbackView: { kind: 'text', body: 'fallback' },
+      requestedCapabilities: [],
+      requestedProfile: 'safe-view'
+    };
+    const artifact = await buildArtifact({ mediaType: 'application/json', payload: new TextEncoder().encode('{}'), uiProposal });
+    const envelopeBytes = encodeCanonical(artifact) as Uint8Array;
+    const frames = await renderFrames(envelopeBytes, 96, 40);
+
+    const el = mount();
+    el.approvalPolicy = { 'safe-view': 'prompt' };
+    let proposalFired = false;
+    el.addEventListener('oat-ui-proposal', () => (proposalFired = true));
+
+    for (const frame of frames) {
+      el.processFrame(frame);
+      if (el.state === 'awaiting-consent') break;
+    }
+
+    el.dismissProposal('user-said-no');
+    expect(el.state).toBe('rejected');
+    expect(proposalFired).toBe(false);
+  });
+
+  it('requireSignatureFor downgrades an unsigned safe-view proposal end to end', async () => {
+    const uiProposal: UiProposalEnvelope = {
+      type: 'ui.proposal',
+      version: 1,
+      proposalId: 'p5',
+      origin: { id: 'sender-1' },
+      title: 'Needs signature',
+      preferredView: { kind: 'text', body: 'x' },
+      fallbackView: { kind: 'text', body: 'fallback' },
+      requestedCapabilities: [],
+      requestedProfile: 'safe-view'
+    };
+    const artifact = await buildArtifact({ mediaType: 'application/json', payload: new TextEncoder().encode('{}'), uiProposal }); // unsigned
+    const envelopeBytes = encodeCanonical(artifact) as Uint8Array;
+    const frames = await renderFrames(envelopeBytes, 96, 40);
+
+    const el = mount();
+    el.requireSignatureFor = ['safe-view'];
+
+    for (const frame of frames) {
+      el.processFrame(frame);
+      if (el.state === 'downgraded') break;
+    }
+
+    expect(el.state).toBe('downgraded');
+    expect(el.uiDecision?.reasons).toContain('signature-required-for-profile');
   });
 
   it('processFrame ignores frames with no decodable QR code', async () => {

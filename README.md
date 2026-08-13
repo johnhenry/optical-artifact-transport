@@ -40,19 +40,43 @@ Implements the full M0–M6 milestone set from the design doc (`docs/design.md`)
   reachable for a signed artifact from an explicitly trusted sender, with the
   receiver deployment separately opting in — see Security model below.
 
+Beyond the M0–M6 milestones, a second pass closed several gaps identified
+against the original design conversation (`docs/design.md`):
+
+- **Bidirectional `ui.decision`** (`@oat/protocol`'s `ui-decision.ts`) — the
+  receiver can build a signed acknowledgment (accepted/downgraded/rejected,
+  granted/denied capabilities, a correlation token) and send it back to the
+  sender over any channel; the demo shows it traveling back optically via a
+  second `<optical-send>`/`<optical-receive>` pair.
+- **Granular per-profile `ReceiverUiPolicy`** — `requireSignatureFor` (a
+  per-profile signature requirement, independent of the element-wide
+  `verify` attribute) and `approval` (`'automatic'`/`'prompt'`/
+  `'prompt-with-warning'` per profile), surfaced as a new `awaiting-consent`
+  receiver state gated behind `confirmProposal()`/`dismissProposal()`.
+- **Sanitizer resource limits** — `maxNodes`/`maxDepth`/`maxTextBytes` per
+  profile, enforced on the sanitized result (not on parsing the raw input).
+- **Native `Element.setHTML()` layering** — used as a pre-pass ahead of the
+  pinned allowlist sanitizer when the runtime supports it, with an explicit
+  per-profile config (the native API's *default* config is stricter than
+  some of our profiles for specific elements — Chrome silently drops
+  `<form>`/`<button>` without one).
+- **Trusted Types** — a dedicated `oat-sandbox-srcdoc` policy so the M6
+  iframe's `srcdoc` assignment keeps working under a host CSP with
+  `require-trusted-types-for 'script'`.
+
 ## Packages
 
 ```
 packages/
-  protocol/            artifact envelope, canonical CBOR, digest, ed25519 signatures, capabilities, UI proposal types, M6 sandbox eligibility
+  protocol/            artifact envelope, canonical CBOR, digest, ed25519 signatures, capabilities, UI proposal types, M6 sandbox eligibility, ui.decision wire type
   codecs/qr-fountain/  LT fountain encoder/decoder + QR frame render/decode
   sim/                 transport simulator (loss/dup/reorder/corruption)
   sender/              <optical-send> custom element
-  receiver/            <optical-receive> custom element
-  ui/                  safe-view/safe-html rendering, sanitizer, capability policy engine, M6 sandbox host + iframe bridge
+  receiver/            <optical-receive> custom element, granular per-profile policy (requireSignatureFor/approval)
+  ui/                  safe-view/safe-html rendering, sanitizer (native-API layering + resource limits), M6 sandbox host + iframe bridge + Trusted Types policy
   bootstrap/           M5 bootstrap workflows: release-manifest fetch+verify, WebRTC offer/answer
 examples/
-  file-transfer/       live demo wiring sender + receiver together, including M5/M6 flows
+  file-transfer/       live demo wiring sender + receiver together, including M5/M6 flows + the ui.decision round trip
 ```
 
 ## Development
@@ -94,5 +118,13 @@ npm run dev:demo   # examples/file-transfer on localhost
   themselves rather than trusting every caller to check first. Release-manifest
   URLs are additionally restricted to `https:` by default
   (`allowedUrlSchemes`) as an SSRF guard, mirroring `@oat/ui`'s sanitizer.
+- **`ui.decision` artifacts** are subject to the same rule: `extractUiDecision`
+  refuses anything without a verified signature, since a decision claims
+  capabilities were granted.
+- **Trusted Types**: hosts that enable `Content-Security-Policy:
+  require-trusted-types-for 'script'` must add `trusted-types
+  oat-sandbox-srcdoc` (or `trusted-types *`) to their policy for the M6
+  iframe's `srcdoc` assignment to keep working — see
+  `packages/ui/src/trusted-types.ts`.
 
 See `docs/design.md` for the full PRD this implementation follows.

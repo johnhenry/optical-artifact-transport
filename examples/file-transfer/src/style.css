@@ -104,3 +104,18 @@ optical-receive {
 #capability-host:empty {
   display: none;
 }
+
+.hint {
+  font-size: 0.85rem;
+  color: #666;
+  margin: 0;
+}
+
+#decision-panel {
+  grid-column: 1 / -1;
+}
+
+#decision-panel optical-send,
+#decision-panel optical-receive {
+  max-width: 200px;
+}

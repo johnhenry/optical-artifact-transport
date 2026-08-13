@@ -1,7 +1,11 @@
 import {
   createCapabilityPolicy,
+  buildUiDecisionArtifact,
   type CapabilityPolicy,
-  type OatArtifact
+  type OatArtifact,
+  type BuildArtifactOptions,
+  type UiDecision,
+  type UiDecisionStatus
 } from '@oat/protocol';
 import type { ImageDataLike } from '@oat/qr-fountain';
 import { createCameraController, type CameraController, type FacingMode } from './camera-controller.js';
@@ -9,7 +13,7 @@ import { createInlineDecodeWorker, type DecodeWorker } from './decode-worker.js'
 import { PacketStore } from './packet-store.js';
 import { assembleArtifact } from './assembler.js';
 import { verifyReceivedArtifact, type ReceiverVerificationResult } from './verifier.js';
-import { PolicyEngine, type UiDecision } from './policy-engine.js';
+import { PolicyEngine, profileOf, type PolicyDecision, type SignableProfile, type UiApprovalMode } from './policy-engine.js';
 
 export type ReceiverState =
   | 'idle'
@@ -20,6 +24,7 @@ export type ReceiverState =
   | 'accepted'
   | 'ui-proposed'
   | 'unsafe-proposed'
+  | 'awaiting-consent'
   | 'downgraded'
   | 'rejected'
   | 'error';
@@ -33,6 +38,7 @@ const DISPLAY_BUCKET: Record<ReceiverState, 'empty' | 'scanning' | 'verifying' |
   accepted: 'complete',
   'ui-proposed': 'complete',
   'unsafe-proposed': 'complete',
+  'awaiting-consent': 'complete',
   downgraded: 'complete',
   rejected: 'rejected',
   error: 'error'
@@ -92,12 +98,14 @@ export class OpticalReceiveElement extends HTMLElement {
   #capabilityPolicy: CapabilityPolicy = createCapabilityPolicy([]);
   #allowUnsafeHtml = false;
   #trustedPublicKeysHex: string[] = [];
+  #requireSignatureFor: SignableProfile[] = [];
+  #approval: Partial<Record<SignableProfile, UiApprovalMode>> = {};
 
   #state: ReceiverState = 'idle';
   #timer: ReturnType<typeof setInterval> | null = null;
   #artifact: OatArtifact | null = null;
   #verification: ReceiverVerificationResult | null = null;
-  #uiDecision: UiDecision | null = null;
+  #uiDecision: PolicyDecision | null = null;
   #userApprovedCapabilities: string[] = [];
 
   constructor() {
@@ -144,7 +152,7 @@ export class OpticalReceiveElement extends HTMLElement {
     return this.#verification;
   }
 
-  get uiDecision(): UiDecision | null {
+  get uiDecision(): PolicyDecision | null {
     return this.#uiDecision;
   }
 
@@ -186,6 +194,28 @@ export class OpticalReceiveElement extends HTMLElement {
     this.#rebuildPolicyEngine();
   }
 
+  /**
+   * Per-profile signature requirement, independent of the `verify`/
+   * `require-signature` attribute (which is a blanket, artifact-wide
+   * requirement). `sandboxed-html` always requires a signature regardless
+   * of whether it's listed here — see `checkSandboxEligibility`.
+   */
+  set requireSignatureFor(profiles: readonly SignableProfile[]) {
+    this.#requireSignatureFor = [...profiles];
+    this.#rebuildPolicyEngine();
+  }
+
+  /**
+   * Per-profile consent UX: `'automatic'` (default), `'prompt'`, or
+   * `'prompt-with-warning'`. A non-`'automatic'` mode puts the receiver in
+   * the `awaiting-consent` state and withholds `oat-ui-proposal` until
+   * `confirmProposal()`/`dismissProposal()` is called — see those methods.
+   */
+  set approvalPolicy(policy: Partial<Record<SignableProfile, UiApprovalMode>>) {
+    this.#approval = { ...policy };
+    this.#rebuildPolicyEngine();
+  }
+
   #rebuildPolicyEngine(): void {
     this.#policyEngine = new PolicyEngine({
       capabilityPolicy: this.#capabilityPolicy,
@@ -194,12 +224,14 @@ export class OpticalReceiveElement extends HTMLElement {
       // it — anyone can generate a keypair. So allowUnsafeHtml is inert
       // without a non-empty trust list: flipping the opt-in alone must
       // never be enough to run arbitrary sender script.
-      allowUnsafeHtml: this.#allowUnsafeHtml && this.#trustedPublicKeysHex.length > 0
+      allowUnsafeHtml: this.#allowUnsafeHtml && this.#trustedPublicKeysHex.length > 0,
+      requireSignatureFor: this.#requireSignatureFor,
+      approval: this.#approval
     });
   }
 
   /** Grants capabilities the user has explicitly approved; re-evaluates any pending UI decision. */
-  approveCapabilities(capabilities: readonly string[]): UiDecision | null {
+  approveCapabilities(capabilities: readonly string[]): PolicyDecision | null {
     this.#userApprovedCapabilities = [...new Set([...this.#userApprovedCapabilities, ...capabilities])];
     if (this.#artifact?.uiProposal && this.#verification) {
       this.#uiDecision = this.#policyEngine.decideUi(
@@ -214,6 +246,73 @@ export class OpticalReceiveElement extends HTMLElement {
   /** Checks one capability against this receiver's policy — used by the M6 sandbox bridge to mediate each request individually. */
   checkCapability(capability: string): boolean {
     return this.#policyEngine.checkCapability(capability, this.#userApprovedCapabilities);
+  }
+
+  /**
+   * Proceeds past an `awaiting-consent` gate (an `accept-safe` decision
+   * whose `approvalMode` is `'prompt'`/`'prompt-with-warning'`), emitting
+   * the withheld `oat-ui-proposal` event.
+   */
+  confirmProposal(): void {
+    if (this.#state !== 'awaiting-consent' || !this.#artifact?.uiProposal || !this.#uiDecision) return;
+    this.#setState('ui-proposed');
+    this.dispatchEvent(
+      new CustomEvent('oat-ui-proposal', {
+        detail: { proposal: this.#artifact.uiProposal, decision: this.#uiDecision, artifact: this.#artifact }
+      })
+    );
+  }
+
+  /** Declines a pending `awaiting-consent` proposal without rendering it. */
+  dismissProposal(reason = 'user-dismissed'): void {
+    if (this.#state !== 'awaiting-consent') return;
+    this.#setState('rejected', { reason });
+    this.dispatchEvent(new CustomEvent('oat-rejected', { detail: { reasons: [reason] } }));
+  }
+
+  /**
+   * Builds the wire-level `ui.decision` acknowledgment for the most recent
+   * UI proposal — see `@oat/protocol`'s `ui-decision.ts` for the type and
+   * the design doc's acceptance algorithm step 7. This only builds the
+   * artifact; how it physically travels back to the sender (a second
+   * `<optical-send>`, a bootstrap data channel, ...) is up to the host.
+   */
+  async buildDecisionArtifact(sign?: BuildArtifactOptions['sign']): Promise<OatArtifact> {
+    if (!this.#artifact?.uiProposal || !this.#uiDecision) {
+      throw new Error('optical-receive: no pending UI decision to build an artifact for');
+    }
+    return buildUiDecisionArtifact(this.#toWireDecision(this.#artifact.uiProposal, this.#uiDecision), sign);
+  }
+
+  #toWireDecision(
+    proposal: NonNullable<OatArtifact['uiProposal']>,
+    decision: PolicyDecision
+  ): UiDecision {
+    const STATUS_BY_OUTCOME: Record<PolicyDecision['outcome'], UiDecisionStatus> = {
+      reject: 'rejected',
+      downgrade: 'downgraded',
+      'accept-safe': 'accepted',
+      'accept-unsafe': 'accepted'
+    };
+    const status = STATUS_BY_OUTCOME[decision.outcome];
+    const granted = decision.effectiveCapabilities;
+    const denied = proposal.requestedCapabilities
+      .filter((c) => !granted.includes(c.capability))
+      .map((c) => ({ capability: c.capability, reason: decision.reasons[0] ?? 'not granted by receiver policy' }));
+
+    return {
+      type: 'ui.decision',
+      version: 1,
+      proposalId: proposal.proposalId,
+      status,
+      profile: status === 'accepted' ? profileOf(proposal.requestedProfile) : undefined,
+      grantedCapabilities: granted,
+      deniedCapabilities: denied,
+      sanitized: status === 'accepted' && decision.outcome !== 'accept-unsafe',
+      fallbackUsed: decision.outcome === 'downgrade',
+      capabilityToken: granted.length > 0 ? crypto.randomUUID() : undefined,
+      decidedAt: new Date().toISOString()
+    };
   }
 
   #setState(state: ReceiverState, detail?: Record<string, unknown>): void {
@@ -347,12 +446,30 @@ export class OpticalReceiveElement extends HTMLElement {
     if (artifact.uiProposal) {
       const decision = this.#policyEngine.decideUi(artifact.uiProposal, verification, this.#userApprovedCapabilities);
       this.#uiDecision = decision;
-      const nextState: ReceiverState =
-        decision.outcome === 'downgrade' ? 'downgraded' : decision.outcome === 'accept-unsafe' ? 'unsafe-proposed' : 'ui-proposed';
-      this.#setState(nextState);
-      this.dispatchEvent(
-        new CustomEvent('oat-ui-proposal', { detail: { proposal: artifact.uiProposal, decision, artifact } })
-      );
+
+      if (decision.outcome === 'downgrade') {
+        this.#setState('downgraded');
+        this.dispatchEvent(
+          new CustomEvent('oat-ui-proposal', { detail: { proposal: artifact.uiProposal, decision, artifact } })
+        );
+      } else if (decision.outcome === 'accept-unsafe') {
+        this.#setState('unsafe-proposed');
+        this.dispatchEvent(
+          new CustomEvent('oat-ui-proposal', { detail: { proposal: artifact.uiProposal, decision, artifact } })
+        );
+      } else if (decision.requiresExplicitApproval) {
+        // accept-safe, but this profile's approvalMode requires an explicit host/user gesture
+        // before oat-ui-proposal fires — see confirmProposal()/dismissProposal().
+        this.#setState('awaiting-consent');
+        this.dispatchEvent(
+          new CustomEvent('oat-consent-required', { detail: { proposal: artifact.uiProposal, decision, artifact } })
+        );
+      } else {
+        this.#setState('ui-proposed');
+        this.dispatchEvent(
+          new CustomEvent('oat-ui-proposal', { detail: { proposal: artifact.uiProposal, decision, artifact } })
+        );
+      }
     } else {
       this.#setState('accepted');
     }

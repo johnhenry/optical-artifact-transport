@@ -7,6 +7,7 @@ import {
   computeDigest,
   extractPayload,
   verifyArtifact,
+  extractUiDecision,
   type UiActionRequest,
   type UiProposalEnvelope
 } from '@oat/protocol';
@@ -93,6 +94,10 @@ function toHex(bytes: Uint8Array): string {
 
 const signingKey = generateSigningKey();
 receiver.trustedPublicKeys = [toHex(signingKey.publicKey)];
+
+$<HTMLInputElement>('#approval-toggle').addEventListener('change', (e) => {
+  receiver.approvalPolicy = (e.target as HTMLInputElement).checked ? { 'safe-html': 'prompt' } : {};
+});
 
 // --- Payload-type field visibility -------------------------------------
 
@@ -269,6 +274,26 @@ receiver.addEventListener('oat-rejected', ((e: CustomEvent) => {
   resultEl.textContent = `Rejected: ${JSON.stringify(e.detail?.verification?.reasons ?? e.detail?.reasons)}`;
 }) as EventListener);
 
+receiver.addEventListener('oat-consent-required', ((e: CustomEvent) => {
+  const { proposal, decision } = e.detail;
+  log(receiverLog, 'consent required:', { approvalMode: decision.approvalMode, proposalId: proposal.proposalId });
+
+  proposalHost.replaceChildren();
+  const panel = document.createElement('div');
+  const msg = document.createElement('p');
+  msg.textContent = `"${proposal.title}" is ready to render (approvalMode: ${decision.approvalMode}) — confirm to show it.`;
+  const confirmBtn = document.createElement('button');
+  confirmBtn.type = 'button';
+  confirmBtn.textContent = 'Confirm & render';
+  confirmBtn.addEventListener('click', () => receiver.confirmProposal());
+  const dismissBtn = document.createElement('button');
+  dismissBtn.type = 'button';
+  dismissBtn.textContent = 'Dismiss';
+  dismissBtn.addEventListener('click', () => receiver.dismissProposal('user-dismissed'));
+  panel.append(msg, confirmBtn, dismissBtn);
+  proposalHost.appendChild(panel);
+}) as EventListener);
+
 receiver.addEventListener('oat-artifact', (async (e: CustomEvent) => {
   const { artifact, verification } = e.detail;
   log(receiverLog, 'artifact delivered:', { mediaType: artifact.mediaType, valid: verification.valid });
@@ -384,5 +409,52 @@ receiver.addEventListener('oat-ui-proposal', ((e: CustomEvent) => {
     });
   } else {
     renderProposal();
+  }
+}) as EventListener);
+
+// --- Decision echo: after the receiver settles on a UI decision, build a
+// signed ui.decision artifact and send it back optically — this small pair
+// of elements plays "the original sender's inbox" receiving it, closing the
+// loop the design doc's acceptance algorithm calls for (step 7).
+
+const decisionSender = $<OpticalSendElement>('#decision-sender');
+const decisionReceiverEl = $<OpticalReceiveElement>('#decision-receiver');
+const decisionLog = $<HTMLPreElement>('#decision-log');
+
+decisionReceiverEl.trustedPublicKeys = [toHex(signingKey.publicKey)];
+decisionReceiverEl.setAttribute('verify', 'signature');
+
+let decisionLoopbackActive = false;
+decisionSender.addEventListener('oat-progress', () => {
+  if (!decisionLoopbackActive) return;
+  const canvas = decisionSender.shadowRoot?.querySelector('canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  decisionReceiverEl.processFrame(ctx.getImageData(0, 0, canvas.width, canvas.height));
+});
+
+decisionReceiverEl.addEventListener('oat-artifact', (async (e: CustomEvent) => {
+  const { artifact, verification } = e.detail;
+  try {
+    const decision = await extractUiDecision(artifact, verification);
+    log(decisionLog, 'sender received signed decision:', decision);
+  } catch (err) {
+    log(decisionLog, 'failed to extract decision:', (err as Error).message);
+  }
+}) as unknown as EventListener);
+
+receiver.addEventListener('oat-ui-proposal', (async () => {
+  try {
+    decisionSender.stop();
+    decisionReceiverEl.reset();
+    const decisionArtifact = await receiver.buildDecisionArtifact({
+      secretKey: signingKey.secretKey,
+      keyId: 'receiver-decision-key'
+    });
+    decisionLoopbackActive = true;
+    decisionSender.sendArtifact(decisionArtifact);
+  } catch (err) {
+    log(decisionLog, 'failed to build decision artifact:', (err as Error).message);
   }
 }) as EventListener);

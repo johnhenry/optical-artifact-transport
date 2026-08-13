@@ -1,5 +1,6 @@
 import type { SandboxedHtmlView } from '@oat/protocol';
 import { createIframeBridge, type ReceiverUiResponse, type RemoteUiRequest } from './iframe-bridge.js';
+import { toTrustedSrcdoc } from './trusted-types.js';
 
 // Re-exported for convenience — the canonical definition lives in `@oat/protocol`
 // so `@oat/receiver`'s policy engine and this module can never disagree on it.
@@ -118,7 +119,9 @@ export function mountSandboxedHtml(container: Element, options: SandboxHostOptio
     destroy();
   });
 
-  iframe.srcdoc = `<!doctype html><meta http-equiv="Content-Security-Policy" content="${SANDBOXED_CSP}">${options.view.html}`;
+  iframe.srcdoc = toTrustedSrcdoc(
+    `<!doctype html><meta http-equiv="Content-Security-Policy" content="${SANDBOXED_CSP}">${options.view.html}`
+  );
   container.append(banner, iframe);
 
   const bridge = createIframeBridge(iframe, {

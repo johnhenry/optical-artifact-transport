@@ -77,6 +77,10 @@
         <button id="camera-btn" type="button">Start camera instead</button>
         <button id="reset-btn" type="button">Reset</button>
       </div>
+      <label class="checkbox">
+        <input type="checkbox" id="approval-toggle" />
+        Gate safe-html proposals behind an explicit confirm (approval: "prompt")
+      </label>
 
       <optical-receive id="receiver" controls ui-policy="safe"></optical-receive>
 
@@ -86,6 +90,19 @@
       <h3>Delivered artifact</h3>
       <pre id="result" class="log">(nothing received yet)</pre>
       <pre id="receiver-log" class="log"></pre>
+    </section>
+
+    <section class="panel" id="decision-panel">
+      <h2>Decision echo (round trip)</h2>
+      <p class="hint">
+        After the receiver decides on a UI proposal, it builds a signed
+        <code>ui.decision</code> artifact and sends it back optically — this
+        pair of elements plays "the original sender's inbox" receiving that
+        acknowledgment.
+      </p>
+      <optical-send id="decision-sender" frame-rate="12" autostart></optical-send>
+      <optical-receive id="decision-receiver"></optical-receive>
+      <pre id="decision-log" class="log">(no decision echoed yet)</pre>
     </section>
   </main>
 
