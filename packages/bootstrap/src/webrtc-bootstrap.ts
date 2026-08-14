@@ -1,4 +1,4 @@
-import { buildArtifact, extractPayload, type BuildArtifactOptions, type OatArtifact } from '@oat/protocol';
+import { buildArtifact, extractPayload, type BuildArtifactOptions, type OatArtifact } from '@johnhenry/oat-protocol';
 import { assertVerified, type BootstrapVerification } from './require-verified.js';
 
 export const WEBRTC_BOOTSTRAP_MEDIA_TYPE = 'application/vnd.oat.webrtc-bootstrap+json';

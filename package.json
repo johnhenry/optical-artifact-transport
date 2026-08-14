@@ -20,7 +20,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc -b --pretty",
     "dev:demo": "npm run dev -w examples/file-transfer",
-    "start": "serve -l tcp://0.0.0.0:${PORT:-3000} examples/file-transfer/dist"
+    "start": "serve -l tcp://0.0.0.0:${PORT:-3000} examples/file-transfer/dist",
+    "publish:packages": "./scripts/staggered-publish.sh",
+    "publish:packages:dry-run": "./scripts/staggered-publish.sh --dry-run"
   },
   "dependencies": {
     "serve": "^14.2.4"

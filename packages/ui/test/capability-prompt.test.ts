@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { UiProposalEnvelope } from '@oat/protocol';
+import type { UiProposalEnvelope } from '@johnhenry/oat-protocol';
 import { renderCapabilityPrompt } from '../src/capability-prompt.js';
 
 const proposal: UiProposalEnvelope = {

@@ -1,4 +1,4 @@
-import type { VerificationResult } from '@oat/protocol';
+import type { VerificationResult } from '@johnhenry/oat-protocol';
 
 /** The minimal proof callers must supply before any bootstrap payload is trusted. */
 export type BootstrapVerification = Pick<VerificationResult, 'valid' | 'signatureValid'>;

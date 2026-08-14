@@ -1,4 +1,4 @@
-import type { OatPacket } from '@oat/qr-fountain';
+import type { OatPacket } from '@johnhenry/oat-qr-fountain';
 
 export interface ImpairmentConfig {
   /** Probability in [0,1] that a given packet is dropped entirely. */

@@ -8,14 +8,14 @@ import {
   type BuildArtifactOptions,
   type OatArtifact,
   type VerificationResult
-} from '@oat/protocol';
+} from '@johnhenry/oat-protocol';
 import {
   prepareSource,
   generatePackets,
   FountainDecoder,
   mulberry32,
   type OatPacket
-} from '@oat/qr-fountain';
+} from '@johnhenry/oat-qr-fountain';
 import { applyImpairments, type ImpairmentConfig } from './channel.js';
 
 export interface SimulateTransportOptions {

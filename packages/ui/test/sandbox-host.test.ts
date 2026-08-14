@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { SandboxedHtmlView } from '@oat/protocol';
+import type { SandboxedHtmlView } from '@johnhenry/oat-protocol';
 import { checkSandboxEligibility, mountSandboxedHtml, renderUnsafeOptInPrompt } from '../src/sandbox-host.js';
 
 afterEach(() => {

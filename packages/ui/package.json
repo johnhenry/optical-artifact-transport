@@ -1,10 +1,25 @@
 {
-  "name": "@oat/ui",
+  "name": "@johnhenry/oat-ui",
   "version": "0.1.0",
   "description": "Receiver-owned safe rendering: sanitization profiles, safe-view/safe-html renderers, and the capability consent prompt",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/johnhenry/optical-artifact-transport.git",
+    "directory": "packages/ui"
+  },
+  "homepage": "https://github.com/johnhenry/optical-artifact-transport#readme",
+  "bugs": {
+    "url": "https://github.com/johnhenry/optical-artifact-transport/issues"
+  },
+  "license": "MIT",
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -15,7 +30,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@oat/protocol": "*"
+    "@johnhenry/oat-protocol": "^0.1.0"
   },
   "devDependencies": {
     "typescript": "^5.6.3"

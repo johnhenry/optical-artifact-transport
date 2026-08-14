@@ -19,7 +19,7 @@ export interface DeniedCapability {
  *
  * This type only describes the payload; how it physically travels back is
  * up to the host application — optically via a second `<optical-send>`,
- * over a bootstrap channel (`@oat/bootstrap`'s WebRTC data channel), or any
+ * over a bootstrap channel (`@johnhenry/oat-bootstrap`'s WebRTC data channel), or any
  * other transport. Nothing here assumes a specific return path.
  */
 export interface UiDecision {

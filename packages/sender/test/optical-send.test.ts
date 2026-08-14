@@ -1,11 +1,11 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { verifyArtifact, generateSigningKey, decodeCanonical, isOatArtifact, buildArtifact } from '@oat/protocol';
+import { verifyArtifact, generateSigningKey, decodeCanonical, isOatArtifact, buildArtifact } from '@johnhenry/oat-protocol';
 import { defineOpticalSend, OpticalSendElement } from '../src/optical-send.js';
 
 /**
  * happy-dom (this package's test environment) has no real 2D canvas — QR
  * rendering itself is exercised end to end with a genuine canvas in
- * `@oat/qr-fountain`'s test suite. These tests cover everything the sender
+ * `@johnhenry/oat-qr-fountain`'s test suite. These tests cover everything the sender
  * element controls that doesn't require actual pixels: artifact
  * construction, the slots -> UiProposalEnvelope authoring pipeline,
  * lifecycle state, and event wiring. `#tick()`'s render failures under
@@ -117,7 +117,7 @@ describe('<optical-send> artifact preparation', () => {
     el.source = 'round trip me';
     await readyEvent;
 
-    const { encodeCanonical } = await import('@oat/protocol');
+    const { encodeCanonical } = await import('@johnhenry/oat-protocol');
     const bytes = encodeCanonical(el.artifact) as Uint8Array;
     const decoded = decodeCanonical(bytes);
     expect(isOatArtifact(decoded)).toBe(true);

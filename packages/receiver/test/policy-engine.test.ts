@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createCapabilityPolicy, type UiProposalEnvelope, type VerificationResult } from '@oat/protocol';
+import { createCapabilityPolicy, type UiProposalEnvelope, type VerificationResult } from '@johnhenry/oat-protocol';
 import { PolicyEngine } from '../src/policy-engine.js';
 import type { ReceiverVerificationResult } from '../src/verifier.js';
 

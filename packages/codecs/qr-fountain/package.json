@@ -1,10 +1,25 @@
 {
-  "name": "@oat/qr-fountain",
+  "name": "@johnhenry/oat-qr-fountain",
   "version": "0.1.0",
   "description": "LT fountain coding + QR frame render/decode for optical artifact transport",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/johnhenry/optical-artifact-transport.git",
+    "directory": "packages/codecs/qr-fountain"
+  },
+  "homepage": "https://github.com/johnhenry/optical-artifact-transport#readme",
+  "bugs": {
+    "url": "https://github.com/johnhenry/optical-artifact-transport/issues"
+  },
+  "license": "MIT",
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

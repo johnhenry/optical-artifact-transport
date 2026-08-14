@@ -1,0 +1,38 @@
+name: Release
+
+# Publish all 7 @johnhenry/oat-* packages to npm (examples/file-transfer is
+# private and never published).
+#   - Tag-triggered: push a tag like v0.1.0.
+#   - Or run manually via workflow_dispatch (uses the versions already in
+#     each package.json).
+# Requires the NPM_TOKEN repo secret (an npm token with publish rights).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+
+      - name: Gate (build + typecheck + tests)
+        run: |
+          npm run build
+          npm run typecheck
+          npm test
+
+      - name: Publish to npm (dependency order)
+        run: ./scripts/staggered-publish.sh
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

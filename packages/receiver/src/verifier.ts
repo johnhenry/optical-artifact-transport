@@ -1,4 +1,4 @@
-import { verifyArtifact, type OatArtifact, type VerificationResult } from '@oat/protocol';
+import { verifyArtifact, type OatArtifact, type VerificationResult } from '@johnhenry/oat-protocol';
 
 export interface ReceiverVerificationOptions {
   requireSignature?: boolean;
@@ -32,7 +32,7 @@ export function toHex(bytes: Uint8Array): string {
 }
 
 /**
- * Wraps `@oat/protocol`'s `verifyArtifact` with the receiver-side checks
+ * Wraps `@johnhenry/oat-protocol`'s `verifyArtifact` with the receiver-side checks
  * that live outside the protocol layer by design: whether this receiver
  * even accepts the artifact's media type, and whether the signer is one
  * this receiver recognizes.

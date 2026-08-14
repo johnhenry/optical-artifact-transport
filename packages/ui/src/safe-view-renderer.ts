@@ -1,4 +1,4 @@
-import type { FormField, FormView, MediaView, TextView, UiActionRequest, UiViewDescriptor } from '@oat/protocol';
+import type { FormField, FormView, MediaView, TextView, UiActionRequest, UiViewDescriptor } from '@johnhenry/oat-protocol';
 import { extractScheme, DEFAULT_URI_SCHEMES } from './sanitizer.js';
 
 export interface RenderContext {

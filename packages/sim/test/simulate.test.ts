@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateSigningKey } from '@oat/protocol';
+import { generateSigningKey } from '@johnhenry/oat-protocol';
 import { simulateTransport } from '../src/simulate.js';
 
 const payload = new TextEncoder().encode(

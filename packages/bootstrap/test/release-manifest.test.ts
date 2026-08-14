@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { computeDigest, generateSigningKey, verifyArtifact } from '@oat/protocol';
+import { computeDigest, generateSigningKey, verifyArtifact } from '@johnhenry/oat-protocol';
 import {
   buildReleaseManifestArtifact,
   extractReleaseManifest,
@@ -36,7 +36,7 @@ describe('release manifest artifact', () => {
   });
 
   it('rejects extracting a non-manifest artifact', async () => {
-    const { buildArtifact } = await import('@oat/protocol');
+    const { buildArtifact } = await import('@johnhenry/oat-protocol');
     const other = await buildArtifact({ mediaType: 'text/plain', payload: new TextEncoder().encode('nope') });
     await expect(extractReleaseManifest(other, VERIFIED)).rejects.toThrow(/not a release-manifest artifact/);
   });

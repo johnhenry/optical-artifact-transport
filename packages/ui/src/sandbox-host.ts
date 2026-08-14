@@ -1,10 +1,10 @@
-import type { SandboxedHtmlView } from '@oat/protocol';
+import type { SandboxedHtmlView } from '@johnhenry/oat-protocol';
 import { createIframeBridge, type ReceiverUiResponse, type RemoteUiRequest } from './iframe-bridge.js';
 import { toTrustedSrcdoc } from './trusted-types.js';
 
-// Re-exported for convenience — the canonical definition lives in `@oat/protocol`
-// so `@oat/receiver`'s policy engine and this module can never disagree on it.
-export { checkSandboxEligibility, type SandboxEligibility, type SandboxEligibilityInput } from '@oat/protocol';
+// Re-exported for convenience — the canonical definition lives in `@johnhenry/oat-protocol`
+// so `@johnhenry/oat-receiver`'s policy engine and this module can never disagree on it.
+export { checkSandboxEligibility, type SandboxEligibility, type SandboxEligibilityInput } from '@johnhenry/oat-protocol';
 
 export interface UnsafeOptInPromptOptions {
   container: Element;

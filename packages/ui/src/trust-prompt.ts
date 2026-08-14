@@ -22,7 +22,7 @@ export function formatFingerprint(hex: string): string {
  * This renders nothing about the pending artifact itself; the caller is
  * responsible for actually trusting the key (typically via
  * `<optical-receive>`'s `trustSenderAndContinue()`) and re-processing —
- * rendering is never authority, same as every other prompt in `@oat/ui`.
+ * rendering is never authority, same as every other prompt in `@johnhenry/oat-ui`.
  */
 export function renderTrustPrompt(options: TrustPromptOptions): void {
   const { container, publicKeyHex, originLabel, onTrust, onReject } = options;

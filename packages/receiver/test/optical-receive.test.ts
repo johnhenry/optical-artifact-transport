@@ -7,14 +7,14 @@ import {
   generateSigningKey,
   createCapabilityPolicy,
   type UiProposalEnvelope
-} from '@oat/protocol';
-import { prepareSource, generatePackets, renderPacketToCanvas, type ImageDataLike } from '@oat/qr-fountain';
+} from '@johnhenry/oat-protocol';
+import { prepareSource, generatePackets, renderPacketToCanvas, type ImageDataLike } from '@johnhenry/oat-qr-fountain';
 import { defineOpticalReceive, OpticalReceiveElement } from '../src/optical-receive.js';
 
 /**
  * Exercises the full capture -> decode -> fountain-reassemble -> verify ->
  * policy pipeline with *real* rendered QR frames (via @napi-rs/canvas, the
- * same approach `@oat/qr-fountain`'s own tests use), fed straight into
+ * same approach `@johnhenry/oat-qr-fountain`'s own tests use), fed straight into
  * `processFrame()`. This deliberately bypasses `getUserMedia`, which no
  * headless test environment provides — but nothing else about the pipeline
  * is mocked.
@@ -307,7 +307,7 @@ describe('<optical-receive> end-to-end (synthetic QR frames)', () => {
     expect(el.uiDecision?.outcome).toBe('accept-safe');
     expect(el.uiDecision?.effectiveCapabilities).toEqual(['agent.session.import']);
 
-    const { verifyArtifact, extractUiDecision } = await import('@oat/protocol');
+    const { verifyArtifact, extractUiDecision } = await import('@johnhenry/oat-protocol');
     const { secretKey } = generateSigningKey();
     const decisionArtifact = await el.buildDecisionArtifact({ secretKey, keyId: 'receiver-key' });
     const decisionVerification = verifyArtifact(decisionArtifact, { requireSignature: true });

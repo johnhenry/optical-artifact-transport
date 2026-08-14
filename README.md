@@ -43,7 +43,7 @@ Implements the full M0–M6 milestone set from the design doc (`docs/design.md`)
 Beyond the M0–M6 milestones, a second pass closed several gaps identified
 against the original design conversation (`docs/design.md`):
 
-- **Bidirectional `ui.decision`** (`@oat/protocol`'s `ui-decision.ts`) — the
+- **Bidirectional `ui.decision`** (`@johnhenry/oat-protocol`'s `ui-decision.ts`) — the
   receiver can build a signed acknowledgment (accepted/downgraded/rejected,
   granted/denied capabilities, a correlation token) and send it back to the
   sender over any channel; the demo shows it traveling back optically via a
@@ -70,7 +70,7 @@ against the original design conversation (`docs/design.md`):
   `trustedPublicKeys` surfaces as a new `unknown-sender` receiver state
   (`oat-unknown-sender` event) instead of silently trusting or rejecting it;
   `trustSenderAndContinue()`/`rejectUnknownSender()` resolve it, and
-  `@oat/ui`'s `renderTrustPrompt()` renders the "confirm public key:
+  `@johnhenry/oat-ui`'s `renderTrustPrompt()` renders the "confirm public key:
   ..." fingerprint prompt the demo uses.
 
 `examples/file-transfer` was then expanded to exercise more of the
@@ -113,15 +113,15 @@ the way:
 
 ```
 packages/
-  protocol/            artifact envelope, canonical CBOR, digest, ed25519 signatures, capabilities, UI proposal types, M6 sandbox eligibility, ui.decision wire type
-  codecs/qr-fountain/  LT fountain encoder/decoder + QR frame render/decode
-  sim/                 transport simulator (loss/dup/reorder/corruption)
-  sender/              <optical-send> custom element
-  receiver/            <optical-receive> custom element, granular per-profile policy (requireSignatureFor/approval)
-  ui/                  safe-view/safe-html rendering, sanitizer (native-API layering + resource limits), M6 sandbox host + iframe bridge + Trusted Types policy
-  bootstrap/           M5 bootstrap workflows: release-manifest fetch+verify, WebRTC offer/answer
+  protocol/            @johnhenry/oat-protocol      artifact envelope, canonical CBOR, digest, ed25519 signatures, capabilities, UI proposal types, M6 sandbox eligibility, ui.decision wire type
+  codecs/qr-fountain/  @johnhenry/oat-qr-fountain    LT fountain encoder/decoder + QR frame render/decode
+  sim/                 @johnhenry/oat-sim            transport simulator (loss/dup/reorder/corruption)
+  sender/              @johnhenry/oat-sender         <optical-send> custom element
+  receiver/            @johnhenry/oat-receiver       <optical-receive> custom element, granular per-profile policy (requireSignatureFor/approval)
+  ui/                  @johnhenry/oat-ui             safe-view/safe-html rendering, sanitizer (native-API layering + resource limits), M6 sandbox host + iframe bridge + Trusted Types policy
+  bootstrap/           @johnhenry/oat-bootstrap      M5 bootstrap workflows: release-manifest fetch+verify, WebRTC offer/answer
 examples/
-  file-transfer/       live demo wiring sender + receiver together: M5/M6 flows, the ui.decision round trip, arbitrary file transfer, a declarative form proposal, live receiver policy presets, and a capability with a real (downloadable) effect
+  file-transfer/       (not published)               live demo wiring sender + receiver together: M5/M6 flows, the ui.decision round trip, arbitrary file transfer, a declarative form proposal, live receiver policy presets, and a capability with a real (downloadable) effect
 ```
 
 ## Development
@@ -162,7 +162,7 @@ npm run dev:demo   # examples/file-transfer on localhost
   HTTP fetch, applying WebRTC session data), so they enforce this
   themselves rather than trusting every caller to check first. Release-manifest
   URLs are additionally restricted to `https:` by default
-  (`allowedUrlSchemes`) as an SSRF guard, mirroring `@oat/ui`'s sanitizer.
+  (`allowedUrlSchemes`) as an SSRF guard, mirroring `@johnhenry/oat-ui`'s sanitizer.
 - **`ui.decision` artifacts** are subject to the same rule: `extractUiDecision`
   refuses anything without a verified signature, since a decision claims
   capabilities were granted.

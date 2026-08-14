@@ -5,7 +5,7 @@ import {
   type ArtifactDigest,
   type BuildArtifactOptions,
   type OatArtifact
-} from '@oat/protocol';
+} from '@johnhenry/oat-protocol';
 import { assertVerified, type BootstrapVerification } from './require-verified.js';
 
 export const RELEASE_MANIFEST_MEDIA_TYPE = 'application/vnd.oat.release-manifest+json';
@@ -123,7 +123,7 @@ export interface FetchVerifyOptions {
   /**
    * `entry.urls` travels over the optical channel under the sender's
    * control — restricting which schemes are fetchable mirrors the same
-   * allowlist `@oat/ui`'s sanitizer already applies to sender-controlled
+   * allowlist `@johnhenry/oat-ui`'s sanitizer already applies to sender-controlled
    * `href`/`src` values. Defaults to `['https:']`, matching this module's
    * own "ordinary HTTPS" design intent; widen deliberately if you need to.
    */

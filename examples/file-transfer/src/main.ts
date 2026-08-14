@@ -1,5 +1,5 @@
-import { defineOpticalSend, type OpticalSendElement } from '@oat/sender';
-import { defineOpticalReceive, type OpticalReceiveElement } from '@oat/receiver';
+import { defineOpticalSend, type OpticalSendElement } from '@johnhenry/oat-sender';
+import { defineOpticalReceive, type OpticalReceiveElement } from '@johnhenry/oat-receiver';
 import {
   buildArtifact,
   generateSigningKey,
@@ -10,8 +10,8 @@ import {
   extractUiDecision,
   type UiActionRequest,
   type UiProposalEnvelope
-} from '@oat/protocol';
-import { renderSafeHtml, renderSafeView, renderCapabilityPrompt, renderUnsafeOptInPrompt, mountSandboxedHtml, renderTrustPrompt } from '@oat/ui';
+} from '@johnhenry/oat-protocol';
+import { renderSafeHtml, renderSafeView, renderCapabilityPrompt, renderUnsafeOptInPrompt, mountSandboxedHtml, renderTrustPrompt } from '@johnhenry/oat-ui';
 import QRCode from 'qrcode';
 import {
   buildReleaseManifestArtifact,
@@ -22,7 +22,7 @@ import {
   createAnswerArtifact,
   applyAnswerArtifact,
   WEBRTC_BOOTSTRAP_MEDIA_TYPE
-} from '@oat/bootstrap';
+} from '@johnhenry/oat-bootstrap';
 
 defineOpticalSend();
 defineOpticalReceive();
@@ -41,7 +41,7 @@ const proposalTemplate = sender.querySelector('template[slot="proposal"]') as HT
 const payloadTypeSelect = $<HTMLSelectElement>('#payload-type');
 const resultMedia = $<HTMLDivElement>('#result-media');
 
-// The library imposes no size cap (see @oat/qr-fountain) — this demo's own
+// The library imposes no size cap (see @johnhenry/oat-qr-fountain) — this demo's own
 // guard exists because the effective throughput over 200-byte QR frames at
 // 12fps, after the fountain code's ~30% redundancy overhead, is only about
 // 700 KB/min: technically "works" well past this, but stops being a demo.

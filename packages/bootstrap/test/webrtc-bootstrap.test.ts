@@ -107,7 +107,7 @@ describe('offer/answer artifact exchange', () => {
   });
 
   it('extractWebrtcBootstrapPayload rejects an unrelated artifact', async () => {
-    const { buildArtifact } = await import('@oat/protocol');
+    const { buildArtifact } = await import('@johnhenry/oat-protocol');
     const other = await buildArtifact({ mediaType: 'text/plain', payload: new TextEncoder().encode('nope') });
     await expect(extractWebrtcBootstrapPayload(other, VERIFIED)).rejects.toThrow(/not a webrtc-bootstrap artifact/);
   });

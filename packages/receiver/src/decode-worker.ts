@@ -1,4 +1,4 @@
-import { decodePacketFromImageData, type ImageDataLike, type OatPacket } from '@oat/qr-fountain';
+import { decodePacketFromImageData, type ImageDataLike, type OatPacket } from '@johnhenry/oat-qr-fountain';
 
 /**
  * QR decode is a pure function of one video frame's pixels — a natural fit

@@ -6,8 +6,8 @@ import {
   type BuildArtifactOptions,
   type UiDecision,
   type UiDecisionStatus
-} from '@oat/protocol';
-import type { ImageDataLike } from '@oat/qr-fountain';
+} from '@johnhenry/oat-protocol';
+import type { ImageDataLike } from '@johnhenry/oat-qr-fountain';
 import { createCameraController, type CameraController, type FacingMode } from './camera-controller.js';
 import { createInlineDecodeWorker, type DecodeWorker } from './decode-worker.js';
 import { PacketStore } from './packet-store.js';
@@ -74,7 +74,7 @@ const TEMPLATE = `
  * `<optical-receive>` — captures camera frames, fountain-decodes them into
  * an artifact, verifies its digest/signature/expiry, and (if the sender
  * proposed one) computes a UI decision via `PolicyEngine`. This element
- * never renders sender HTML itself — see `@oat/ui` for the safe-view /
+ * never renders sender HTML itself — see `@johnhenry/oat-ui` for the safe-view /
  * safe-html renderers that consume `oat-ui-proposal` events.
  *
  * `processFrame()` is public specifically so the whole capture->verify->
@@ -338,7 +338,7 @@ export class OpticalReceiveElement extends HTMLElement {
 
   /**
    * Builds the wire-level `ui.decision` acknowledgment for the most recent
-   * UI proposal — see `@oat/protocol`'s `ui-decision.ts` for the type and
+   * UI proposal — see `@johnhenry/oat-protocol`'s `ui-decision.ts` for the type and
    * the design doc's acceptance algorithm step 7. This only builds the
    * artifact; how it physically travels back to the sender (a second
    * `<optical-send>`, a bootstrap data channel, ...) is up to the host.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildArtifact, generateSigningKey } from '@oat/protocol';
+import { buildArtifact, generateSigningKey } from '@johnhenry/oat-protocol';
 import { verifyReceivedArtifact, toHex } from '../src/verifier.js';
 
 describe('verifyReceivedArtifact', () => {

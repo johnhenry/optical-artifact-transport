@@ -24,8 +24,8 @@ export interface SandboxEligibilityInput {
  * Refuses `sandboxed-html` (M6 break-glass) rendering unless every
  * eligibility condition holds. This depends only on receiver-side
  * inputs — a sender requesting `sandboxed-html` cannot influence it. Shared
- * by `@oat/receiver`'s policy engine (which decides the outcome) and
- * `@oat/ui`'s sandbox host (which enforces the same gate before mounting
+ * by `@johnhenry/oat-receiver`'s policy engine (which decides the outcome) and
+ * `@johnhenry/oat-ui`'s sandbox host (which enforces the same gate before mounting
  * anything) so the two can never disagree.
  */
 export function checkSandboxEligibility(input: SandboxEligibilityInput): SandboxEligibility {

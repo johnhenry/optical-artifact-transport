@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { SafeHtmlView } from '@oat/protocol';
+import type { SafeHtmlView } from '@johnhenry/oat-protocol';
 import { renderSafeHtml } from '../src/safe-html-renderer.js';
 
 describe('renderSafeHtml', () => {

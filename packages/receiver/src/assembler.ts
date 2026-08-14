@@ -1,4 +1,4 @@
-import { decodeCanonical, isOatArtifact, type OatArtifact } from '@oat/protocol';
+import { decodeCanonical, isOatArtifact, type OatArtifact } from '@johnhenry/oat-protocol';
 
 /**
  * Turns fully-reconstructed fountain bytes back into an `OatArtifact`.

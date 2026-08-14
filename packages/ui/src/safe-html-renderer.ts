@@ -1,4 +1,4 @@
-import type { SafeHtmlView, UiActionRequest } from '@oat/protocol';
+import type { SafeHtmlView, UiActionRequest } from '@johnhenry/oat-protocol';
 import { sanitizeHtml, type SanitizerRules } from './sanitizer.js';
 import type { RenderContext, ActionHandler } from './safe-view-renderer.js';
 

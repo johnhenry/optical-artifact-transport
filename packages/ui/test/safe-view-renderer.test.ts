@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { FormView, MediaView, TextView } from '@oat/protocol';
+import type { FormView, MediaView, TextView } from '@johnhenry/oat-protocol';
 import { renderSafeView } from '../src/safe-view-renderer.js';
 
 describe('renderSafeView', () => {

@@ -1,4 +1,4 @@
-import type { UiProposalEnvelope } from '@oat/protocol';
+import type { UiProposalEnvelope } from '@johnhenry/oat-protocol';
 
 export interface CapabilityAuditRecord {
   proposalId: string;

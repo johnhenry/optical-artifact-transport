@@ -1,4 +1,4 @@
-import { FountainDecoder, type OatPacket } from '@oat/qr-fountain';
+import { FountainDecoder, type OatPacket } from '@johnhenry/oat-qr-fountain';
 
 function artifactIdHex(id: Uint8Array): string {
   return Array.from(id, (b) => b.toString(16).padStart(2, '0')).join('');

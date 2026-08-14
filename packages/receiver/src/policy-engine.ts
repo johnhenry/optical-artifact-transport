@@ -3,7 +3,7 @@ import {
   intersectCapabilities,
   type CapabilityPolicy,
   type UiProposalEnvelope
-} from '@oat/protocol';
+} from '@johnhenry/oat-protocol';
 import type { ReceiverVerificationResult } from './verifier.js';
 
 export type UiDecisionOutcome = 'reject' | 'downgrade' | 'accept-safe' | 'accept-unsafe';
@@ -13,7 +13,7 @@ export type SignableProfile = 'safe-view' | 'safe-html' | 'sandboxed-html';
 
 export type UiApprovalMode = 'automatic' | 'prompt' | 'prompt-with-warning';
 
-/** The policy engine's internal decision — distinct from the wire-level `UiDecision` artifact sent back to the sender (see `@oat/protocol`'s `ui-decision.ts`). */
+/** The policy engine's internal decision — distinct from the wire-level `UiDecision` artifact sent back to the sender (see `@johnhenry/oat-protocol`'s `ui-decision.ts`). */
 export interface PolicyDecision {
   outcome: UiDecisionOutcome;
   reasons: string[];

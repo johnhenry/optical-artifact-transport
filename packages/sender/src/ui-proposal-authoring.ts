@@ -5,7 +5,7 @@ import type {
   TextView,
   UiProposalEnvelope,
   UiRequestedProfile
-} from '@oat/protocol';
+} from '@johnhenry/oat-protocol';
 
 export interface BuildUiProposalOptions {
   /** The `<optical-send>` host element — its light-DOM `<template slot="...">` children are read here. */

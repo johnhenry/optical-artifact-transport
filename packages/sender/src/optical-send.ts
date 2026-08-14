@@ -3,14 +3,14 @@ import {
   computeDigest,
   type OatArtifact,
   type CompressionScheme
-} from '@oat/protocol';
+} from '@johnhenry/oat-protocol';
 import {
   prepareSource,
   generatePackets,
   renderPacketToCanvas,
   type FountainSource,
   type OatPacket
-} from '@oat/qr-fountain';
+} from '@johnhenry/oat-qr-fountain';
 import { resolveSource, type OpticalSource } from './source-adapters.js';
 import { buildUiProposal } from './ui-proposal-authoring.js';
 import { buildSenderArtifact } from './artifact-builder.js';
@@ -193,7 +193,7 @@ export class OpticalSendElement extends HTMLElement {
 
   /**
    * Transmits an already-built `OatArtifact` directly, bypassing envelope
-   * construction — for callers (e.g. `@oat/bootstrap`) that build their own
+   * construction — for callers (e.g. `@johnhenry/oat-bootstrap`) that build their own
    * signed artifact (a release manifest, a WebRTC offer/answer, ...) and
    * just need it fountain-encoded and rendered as QR frames.
    */

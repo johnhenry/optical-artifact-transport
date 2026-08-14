@@ -10,12 +10,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@oat/protocol": "*",
-    "@oat/qr-fountain": "*",
-    "@oat/sender": "*",
-    "@oat/receiver": "*",
-    "@oat/ui": "*",
-    "@oat/bootstrap": "*",
+    "@johnhenry/oat-protocol": "*",
+    "@johnhenry/oat-qr-fountain": "*",
+    "@johnhenry/oat-sender": "*",
+    "@johnhenry/oat-receiver": "*",
+    "@johnhenry/oat-ui": "*",
+    "@johnhenry/oat-bootstrap": "*",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
