@@ -9,7 +9,11 @@ import {
 } from '../src/release-manifest.js';
 import type { BootstrapVerification } from '../src/require-verified.js';
 
-const VERIFIED: BootstrapVerification = { valid: true, signatureValid: true };
+const VERIFIED: BootstrapVerification = { valid: true, signatureValid: true, senderTrusted: true };
+
+function toHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 function manifestFor(bytes: Uint8Array, urls: string[]): ReleaseManifest {
   return {
@@ -25,11 +29,18 @@ describe('release manifest artifact', () => {
     const payloadBytes = crypto.getRandomValues(new Uint8Array(2048));
     const manifest = manifestFor(payloadBytes, ['https://cdn.example/app.bin']);
 
-    const { secretKey } = generateSigningKey();
+    const { publicKey, secretKey } = generateSigningKey();
     const artifact = await buildReleaseManifestArtifact(manifest, { sign: { secretKey, keyId: 'release-key' } });
 
-    const verification = verifyArtifact(artifact, { requireSignature: true });
-    expect(verification.valid).toBe(true);
+    const base = verifyArtifact(artifact, { requireSignature: true });
+    expect(base.valid).toBe(true);
+
+    // A real caller decides sender trust explicitly (e.g. against a known
+    // publisher key list) — `verifyArtifact` alone has no notion of it.
+    const trustedKeysHex = [toHex(publicKey)];
+    const senderTrusted = Boolean(artifact.signature && trustedKeysHex.includes(toHex(artifact.signature.publicKey)));
+    const verification: BootstrapVerification = { ...base, senderTrusted };
+    expect(verification.senderTrusted).toBe(true);
 
     const decoded = await extractReleaseManifest(artifact, verification);
     expect(decoded).toEqual(manifest);
@@ -46,10 +57,11 @@ describe('release manifest artifact', () => {
     const manifest = manifestFor(payloadBytes, ['https://cdn.example/x']);
     const artifact = await buildReleaseManifestArtifact(manifest); // unsigned
 
-    const verification = verifyArtifact(artifact); // valid: true, signatureValid: 'absent'
-    expect(verification.valid).toBe(true);
-    expect(verification.signatureValid).toBe('absent');
+    const base = verifyArtifact(artifact); // valid: true, signatureValid: 'absent'
+    expect(base.valid).toBe(true);
+    expect(base.signatureValid).toBe('absent');
 
+    const verification: BootstrapVerification = { ...base, senderTrusted: true };
     await expect(extractReleaseManifest(artifact, verification)).rejects.toThrow(/unsigned or unverified/);
   });
 
@@ -60,8 +72,31 @@ describe('release manifest artifact', () => {
     const artifact = await buildReleaseManifestArtifact(manifest, { sign: { secretKey } });
 
     await expect(
-      extractReleaseManifest(artifact, { valid: false, signatureValid: true })
+      extractReleaseManifest(artifact, { valid: false, signatureValid: true, senderTrusted: true })
     ).rejects.toThrow(/unsigned or unverified/);
+  });
+
+  /**
+   * Regression for the trust-model finding (`BootstrapVerification` used to
+   * be `Pick<VerificationResult, 'valid' | 'signatureValid'>` — no
+   * sender-identity signal at all). A manifest signed by an unknown/
+   * self-signed key must be refused even though the signature itself is
+   * cryptographically valid, since manifest URLs drive real outbound HTTP
+   * requests.
+   */
+  it('refuses to extract a validly signed manifest from an untrusted sender', async () => {
+    const payloadBytes = new TextEncoder().encode('x');
+    const manifest = manifestFor(payloadBytes, ['https://cdn.example/x']);
+    const { secretKey } = generateSigningKey(); // attacker's own freshly generated key
+    const artifact = await buildReleaseManifestArtifact(manifest, { sign: { secretKey } });
+
+    const base = verifyArtifact(artifact, { requireSignature: true });
+    expect(base.valid).toBe(true);
+    expect(base.signatureValid).toBe(true);
+
+    await expect(extractReleaseManifest(artifact, { ...base, senderTrusted: false })).rejects.toThrow(
+      /untrusted sender/
+    );
   });
 });
 

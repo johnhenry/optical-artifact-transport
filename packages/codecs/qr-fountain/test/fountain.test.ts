@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { prepareSource, generatePackets, counterSeeds } from '../src/encoder.js';
 import { FountainDecoder } from '../src/decoder.js';
-import { encodePacket, decodePacket } from '../src/packet.js';
+import { encodePacket, decodePacket, MAX_SOURCE_BLOCK_COUNT, MAX_BLOCK_SIZE, MAX_TOTAL_LENGTH } from '../src/packet.js';
 
 function artifactId(): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(16));
@@ -99,5 +99,117 @@ describe('packet binary framing', () => {
     const garbage = new Uint8Array(64);
     garbage[0] = 99; // bogus version
     expect(decodePacket(garbage)).toBeNull();
+  });
+
+  /**
+   * Regression for the DoS finding: `sourceBlockCount`/`blockSize`/
+   * `totalLength` are raw attacker-controlled uint32s that used to flow
+   * straight into `new FountainDecoder(...)` (O(sourceBlockCount) work,
+   * synchronously, pre-verification) with no upper bound. Builds a header
+   * by hand (not via `encodePacket`, which is only ever used by a
+   * cooperating sender and has no reason to guard against this) to model a
+   * hostile frame, and asserts `decodePacket` rejects it outright instead of
+   * returning a packet that would reach `FountainDecoder`.
+   */
+  it('rejects a header claiming an absurd sourceBlockCount before any decoder is constructed', () => {
+    const HEADER_LENGTH = 1 + 16 + 1 + 4 + 4 + 4 + 4;
+    const blockSize = 16;
+    const bytes = new Uint8Array(HEADER_LENGTH + blockSize);
+    const view = new DataView(bytes.buffer);
+    let offset = 0;
+    bytes[offset] = 1; // version
+    offset += 1;
+    bytes.set(crypto.getRandomValues(new Uint8Array(16)), offset); // artifactId
+    offset += 16;
+    bytes[offset] = 1; // fecScheme = lt
+    offset += 1;
+    view.setUint32(offset, 1234, false); // seed
+    offset += 4;
+    view.setUint32(offset, 50_000_000, false); // sourceBlockCount: absurd, ~1.2% of uint32 max
+    offset += 4;
+    view.setUint32(offset, blockSize, false); // blockSize
+    offset += 4;
+    view.setUint32(offset, 50, false); // totalLength: tiny, doesn't hide the attack
+    offset += 4;
+
+    const start = Date.now();
+    expect(decodePacket(bytes)).toBeNull();
+    expect(Date.now() - start).toBeLessThan(1000); // must fail fast, not hang building a decode table
+  });
+
+  it('rejects a header claiming an absurd totalLength', () => {
+    const HEADER_LENGTH = 1 + 16 + 1 + 4 + 4 + 4 + 4;
+    const blockSize = 16;
+    const bytes = new Uint8Array(HEADER_LENGTH + blockSize);
+    const view = new DataView(bytes.buffer);
+    let offset = 0;
+    bytes[offset] = 1;
+    offset += 1;
+    bytes.set(crypto.getRandomValues(new Uint8Array(16)), offset);
+    offset += 16;
+    bytes[offset] = 1;
+    offset += 1;
+    view.setUint32(offset, 1, false); // seed
+    offset += 4;
+    view.setUint32(offset, 1, false); // sourceBlockCount: plausible
+    offset += 4;
+    view.setUint32(offset, blockSize, false);
+    offset += 4;
+    view.setUint32(offset, 0xffffffff, false); // totalLength: ~4.29 GB
+    offset += 4;
+
+    expect(decodePacket(bytes)).toBeNull();
+  });
+
+  it('accepts a header at exactly the allowed ceilings', () => {
+    const HEADER_LENGTH = 1 + 16 + 1 + 4 + 4 + 4 + 4;
+    const blockSize = MAX_BLOCK_SIZE;
+    const bytes = new Uint8Array(HEADER_LENGTH + blockSize);
+    const view = new DataView(bytes.buffer);
+    let offset = 0;
+    bytes[offset] = 1;
+    offset += 1;
+    bytes.set(crypto.getRandomValues(new Uint8Array(16)), offset);
+    offset += 16;
+    bytes[offset] = 1;
+    offset += 1;
+    view.setUint32(offset, 1, false);
+    offset += 4;
+    view.setUint32(offset, MAX_SOURCE_BLOCK_COUNT, false);
+    offset += 4;
+    view.setUint32(offset, blockSize, false);
+    offset += 4;
+    view.setUint32(offset, MAX_TOTAL_LENGTH, false);
+    offset += 4;
+
+    const decoded = decodePacket(bytes);
+    expect(decoded).not.toBeNull();
+    expect(decoded?.sourceBlockCount).toBe(MAX_SOURCE_BLOCK_COUNT);
+    expect(decoded?.blockSize).toBe(MAX_BLOCK_SIZE);
+    expect(decoded?.totalLength).toBe(MAX_TOTAL_LENGTH);
+  });
+
+  it('rejects a blockSize above the ceiling', () => {
+    const HEADER_LENGTH = 1 + 16 + 1 + 4 + 4 + 4 + 4;
+    const blockSize = MAX_BLOCK_SIZE + 1;
+    const bytes = new Uint8Array(HEADER_LENGTH + blockSize);
+    const view = new DataView(bytes.buffer);
+    let offset = 0;
+    bytes[offset] = 1;
+    offset += 1;
+    bytes.set(crypto.getRandomValues(new Uint8Array(16)), offset);
+    offset += 16;
+    bytes[offset] = 1;
+    offset += 1;
+    view.setUint32(offset, 1, false);
+    offset += 4;
+    view.setUint32(offset, 1, false);
+    offset += 4;
+    view.setUint32(offset, blockSize, false);
+    offset += 4;
+    view.setUint32(offset, blockSize, false);
+    offset += 4;
+
+    expect(decodePacket(bytes)).toBeNull();
   });
 });

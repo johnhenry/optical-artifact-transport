@@ -21,6 +21,25 @@ export interface OatPacket {
 const HEADER_LENGTH = 1 + 16 + 1 + 4 + 4 + 4 + 4; // version+artifactId+fec+seed+k+blockSize+totalLength
 const FEC_SCHEME_LT = 1;
 
+/**
+ * Sane ceilings for `sourceBlockCount`/`blockSize`/`totalLength`, enforced by
+ * `decodePacket` *before* any of these attacker-controlled `uint32` fields
+ * can reach `FountainDecoder`'s constructor. That constructor does
+ * `O(sourceBlockCount)` work (array allocation plus `robustSolitonTable`),
+ * synchronously, on the receiver's main thread, before any signature/digest
+ * verification happens — so an unbounded `sourceBlockCount` is a one-frame
+ * pre-auth DoS. `MAX_TOTAL_LENGTH` mirrors the 100 MiB "maximum artifact
+ * size" convention already used elsewhere (see
+ * `packages/bootstrap/src/release-manifest.ts`'s `maxBytes` default), per
+ * the design doc's security model. `MAX_SOURCE_BLOCK_COUNT` and
+ * `MAX_BLOCK_SIZE` are generous relative to any legitimate transfer (real QR
+ * frames carry at most a few KB of payload per packet) but far below
+ * anything that makes `robustSolitonTable`/array allocation expensive.
+ */
+export const MAX_TOTAL_LENGTH = 100 * 1024 * 1024; // 100 MiB
+export const MAX_SOURCE_BLOCK_COUNT = 65_536;
+export const MAX_BLOCK_SIZE = 65_536;
+
 /** Packs a packet into a compact fixed-header binary frame for QR encoding. */
 export function encodePacket(packet: OatPacket): Uint8Array {
   if (packet.artifactId.length !== 16) {
@@ -77,6 +96,13 @@ export function decodePacket(bytes: Uint8Array): OatPacket | null {
   offset += 4;
   const totalLength = view.getUint32(offset, false);
   offset += 4;
+
+  // Reject before any of these fields can drive `O(sourceBlockCount)` work
+  // (see `FountainDecoder`'s constructor) — this must happen before the
+  // packet is ever handed to a decoder, not merely before reconstruction.
+  if (sourceBlockCount === 0 || sourceBlockCount > MAX_SOURCE_BLOCK_COUNT) return null;
+  if (blockSize === 0 || blockSize > MAX_BLOCK_SIZE) return null;
+  if (totalLength > MAX_TOTAL_LENGTH) return null;
 
   if (bytes.length !== HEADER_LENGTH + blockSize) return null;
   const payload = bytes.slice(offset);

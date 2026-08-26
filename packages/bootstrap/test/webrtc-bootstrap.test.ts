@@ -9,7 +9,7 @@ import {
 } from '../src/webrtc-bootstrap.js';
 import type { BootstrapVerification } from '../src/require-verified.js';
 
-const VERIFIED: BootstrapVerification = { valid: true, signatureValid: true };
+const VERIFIED: BootstrapVerification = { valid: true, signatureValid: true, senderTrusted: true };
 
 /**
  * No headless test environment here implements real WebRTC (happy-dom has
@@ -117,11 +117,32 @@ describe('offer/answer artifact exchange', () => {
     const answerer = mockPc('answerer');
     const offerArtifact = await createOfferArtifact(offerer); // unsigned
 
-    await expect(extractWebrtcBootstrapPayload(offerArtifact, { valid: true, signatureValid: 'absent' })).rejects.toThrow(
-      /unsigned or unverified/
-    );
-    await expect(createAnswerArtifact(answerer, offerArtifact, { valid: false, signatureValid: true })).rejects.toThrow(
-      /unsigned or unverified/
-    );
+    await expect(
+      extractWebrtcBootstrapPayload(offerArtifact, { valid: true, signatureValid: 'absent', senderTrusted: true })
+    ).rejects.toThrow(/unsigned or unverified/);
+    await expect(
+      createAnswerArtifact(answerer, offerArtifact, { valid: false, signatureValid: true, senderTrusted: true })
+    ).rejects.toThrow(/unsigned or unverified/);
+  });
+
+  /**
+   * Regression for the trust-model finding: a signature alone ("some key
+   * signed this") used to be sufficient — `BootstrapVerification` didn't
+   * even carry a sender-identity signal. Anyone can self-sign via the public
+   * `generateSigningKey()`, so a validly-signed-but-untrusted offer/answer
+   * must still be refused before it can drive `setRemoteDescription`/
+   * `addIceCandidate`.
+   */
+  it('refuses a validly signed offer/answer from a sender that is not trusted', async () => {
+    const offerer = mockPc('offerer');
+    const answerer = mockPc('answerer');
+    const offerArtifact = await createOfferArtifact(offerer);
+    const untrusted = { valid: true, signatureValid: true, senderTrusted: false } as const;
+
+    await expect(extractWebrtcBootstrapPayload(offerArtifact, untrusted)).rejects.toThrow(/untrusted sender/);
+    await expect(createAnswerArtifact(answerer, offerArtifact, untrusted)).rejects.toThrow(/untrusted sender/);
+
+    const answerArtifact = await createAnswerArtifact(answerer, offerArtifact, VERIFIED);
+    await expect(applyAnswerArtifact(offerer, answerArtifact, untrusted)).rejects.toThrow(/untrusted sender/);
   });
 });

@@ -561,7 +561,14 @@ receiver.addEventListener('oat-artifact', (async (e: CustomEvent) => {
       );
       // The answer was just built locally (not received optically), so there's no receiver-side
       // `verification` for it — verify it the same way any recipient of this artifact would.
-      const answerVerification = verifyArtifact(answerArtifact, { requireSignature: true });
+      // `verifyArtifact` alone only proves "some key signed this" — this demo signed the answer
+      // with its own `signingKey`, so the sender-identity check is against that known key,
+      // the same way a real recipient would check against its trusted-publisher list.
+      const answerVerificationBase = verifyArtifact(answerArtifact, { requireSignature: true });
+      const answerVerification = {
+        ...answerVerificationBase,
+        senderTrusted: Boolean(answerArtifact.signature && toHex(answerArtifact.signature.publicKey) === ownPublicKeyHex)
+      };
       await applyAnswerArtifact(offererPc as RTCPeerConnection, answerArtifact, answerVerification);
       resultEl.textContent = 'WebRTC answer applied. Watch the log below for the live data-channel ping/pong.';
     } catch (err) {
