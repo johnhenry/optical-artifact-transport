@@ -109,20 +109,97 @@ the way:
   downgrade instead of reaching `accept-unsafe` even with `allowUnsafeHtml`
   already opted in.
 
+## Architecture
+
+The pipeline, sender to receiver (from `docs/design.md`, which remains the
+full PRD):
+
+```text
+Source: Blob | URL | ReadableStream | AsyncIterable | structured artifact
+                              |
+                              v
+                    Artifact envelope                @johnhenry/oat-protocol
+     metadata | compression | encryption | signatures | expiry
+                              |
+                              v
+                   Framing + FEC encoder             @johnhenry/oat-qr-fountain
+                              |
+                              v
+              Optical codec: qr-fountain initially
+                              |
+                              v
+                    Display frame scheduler          @johnhenry/oat-sender
+                              |
+                     screen -> camera
+                              |
+                              v
+        Camera decode -> packet store -> FEC reassembly    @johnhenry/oat-receiver
+                              |
+                              v
+            verification -> policy -> app/UI delivery      @johnhenry/oat-receiver + @johnhenry/oat-ui
+```
+
+The layering that keeps this maintainable:
+
+- **The artifact envelope and capability model are the stable platform
+  layers.** Every payload — a message, a file, a UI proposal, a signed
+  `ui.decision`, a bootstrap manifest — travels as the same canonical-CBOR
+  `OatArtifact` with a digest and optional Ed25519 signature. Nothing above
+  the envelope knows or cares what physical codec carried it.
+- **QR is only the first physical codec.** The fountain layer
+  (`@johnhenry/oat-qr-fountain`) emits independently-decodable LT packets;
+  the receiver never needs any particular frame, or frames in order, just
+  *enough* of them — which is why the system tolerates missed frames,
+  glare, focus changes, and late scanning. Future codecs (denser grids,
+  low-salience modulation) slot in under the same envelope.
+- **Verification sits between reassembly and delivery, always.** The
+  receiver never delivers unverified bytes to the host app, and a
+  sender-proposed UI passes through a receiver-owned policy engine with
+  exactly four outcomes: reject, downgrade, accept-safe (sanitized,
+  receiver-rendered), accept-unsafe (M6 break-glass, triple-gated).
+- **Rendering is never authority.** Effective capabilities are always
+  `sender requested ∩ receiver policy ∩ user-approved grants`; declarative
+  actions carry typed, receiver-mediated requests — never remote code,
+  never a DOM handle back to the sender.
+- **The simulator is a first-class surface.** `@johnhenry/oat-sim` runs the
+  identical envelope + fountain pipeline with no camera, display, or
+  canvas, plus seeded loss/duplication/reorder/corruption injection — it's
+  how the transport is tested in CI (see `examples/`).
+
 ## Packages
 
+| Directory | Package | What it is |
+| --- | --- | --- |
+| [`packages/protocol`](packages/protocol/README.md) | `@johnhenry/oat-protocol` | Artifact envelope, canonical CBOR, digest, Ed25519 signatures, capabilities, UI proposal types, M6 sandbox eligibility, `ui.decision` wire type |
+| [`packages/codecs/qr-fountain`](packages/codecs/qr-fountain/README.md) | `@johnhenry/oat-qr-fountain` | LT fountain encoder/decoder + QR frame render/decode |
+| [`packages/sim`](packages/sim/README.md) | `@johnhenry/oat-sim` | Transport simulator (loss/dup/reorder/corruption), no camera needed |
+| [`packages/sender`](packages/sender/README.md) | `@johnhenry/oat-sender` | `<optical-send>` custom element |
+| [`packages/receiver`](packages/receiver/README.md) | `@johnhenry/oat-receiver` | `<optical-receive>` custom element, granular per-profile policy (`requireSignatureFor`/`approval`) |
+| [`packages/ui`](packages/ui/README.md) | `@johnhenry/oat-ui` | Safe-view/safe-html rendering, sanitizer (native-API layering + resource limits), M6 sandbox host + iframe bridge + Trusted Types policy |
+| [`packages/bootstrap`](packages/bootstrap/README.md) | `@johnhenry/oat-bootstrap` | M5 bootstrap workflows: release-manifest fetch+verify, WebRTC offer/answer |
+| [`examples/file-transfer`](examples/file-transfer) | (not published) | Live demo wiring sender + receiver together: M5/M6 flows, the `ui.decision` round trip, arbitrary file transfer, a declarative form proposal, live receiver policy presets, a capability with a real (downloadable) effect |
+
+Full documentation lives at <https://opensource.johnhenry.me/oat/>.
+
+## Examples
+
+Numbered, headless examples live in [`examples/`](examples/README.md) —
+they run on Node with no camera or display, via `@johnhenry/oat-sim`:
+
+```bash
+npm run build       # examples import the built packages
+npm run examples    # runs all numbered examples
+npm run example:02  # or one at a time
 ```
-packages/
-  protocol/            @johnhenry/oat-protocol      artifact envelope, canonical CBOR, digest, ed25519 signatures, capabilities, UI proposal types, M6 sandbox eligibility, ui.decision wire type
-  codecs/qr-fountain/  @johnhenry/oat-qr-fountain    LT fountain encoder/decoder + QR frame render/decode
-  sim/                 @johnhenry/oat-sim            transport simulator (loss/dup/reorder/corruption)
-  sender/              @johnhenry/oat-sender         <optical-send> custom element
-  receiver/            @johnhenry/oat-receiver       <optical-receive> custom element, granular per-profile policy (requireSignatureFor/approval)
-  ui/                  @johnhenry/oat-ui             safe-view/safe-html rendering, sanitizer (native-API layering + resource limits), M6 sandbox host + iframe bridge + Trusted Types policy
-  bootstrap/           @johnhenry/oat-bootstrap      M5 bootstrap workflows: release-manifest fetch+verify, WebRTC offer/answer
-examples/
-  file-transfer/       (not published)               live demo wiring sender + receiver together: M5/M6 flows, the ui.decision round trip, arbitrary file transfer, a declarative form proposal, live receiver policy presets, and a capability with a real (downloadable) effect
-```
+
+| Example | Shows |
+| --- | --- |
+| `01-round-trip.mjs` | Envelope build → fountain encode → decode → verify → payload extraction |
+| `02-lossy-channel.mjs` | Loss/duplication/reordering injection and recovery; graceful failure under extreme loss |
+| `03-signed-verify-reject.mjs` | Signature verification end to end; tampering and unsigned artifacts rejected with reasons |
+| `04-bootstrap-manifest.mjs` | Signed release-manifest bootstrap: extract refuses unsigned, mirrors fall back on digest mismatch |
+
+`examples/file-transfer` is the full browser demo app (`npm run dev:demo`).
 
 ## Development
 

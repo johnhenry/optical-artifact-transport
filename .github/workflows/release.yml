@@ -32,6 +32,9 @@ jobs:
           npm run typecheck
           npm test
 
+      - name: Examples smoke (headless, via oat-sim — each script asserts its own results)
+        run: npm run examples
+
       - name: Publish to npm (dependency order)
         run: ./scripts/staggered-publish.sh
         env:
