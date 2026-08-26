@@ -96,7 +96,15 @@ export function verifyArtifact(
   return { valid, digestValid, signatureValid, expired, reasons };
 }
 
-/** Decompresses `artifact.payload` back to its original bytes. */
-export function extractPayload(artifact: OatArtifact): Promise<Uint8Array> {
-  return decompress(artifact.payload, artifact.compression ?? 'none');
+/**
+ * Decompresses `artifact.payload` back to its original bytes. `maxOutputBytes`
+ * bounds the decompressed size (default: `decompress`'s
+ * `DEFAULT_MAX_DECOMPRESSED_BYTES`, 100 MiB) as a guard against a "gzip
+ * bomb" — a small, highly-compressible attacker-controlled payload that
+ * expands to consume unbounded memory/CPU.
+ */
+export function extractPayload(artifact: OatArtifact, maxOutputBytes?: number): Promise<Uint8Array> {
+  return maxOutputBytes === undefined
+    ? decompress(artifact.payload, artifact.compression ?? 'none')
+    : decompress(artifact.payload, artifact.compression ?? 'none', maxOutputBytes);
 }

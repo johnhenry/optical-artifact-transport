@@ -5,8 +5,12 @@
 // the receiver verifies it, extracts it, and "downloads" the real bytes over
 // a stubbed HTTPS fetch — digest-checked, with a lying mirror skipped.
 // Along the way: the gate that makes this safe — extraction REFUSES anything
-// without an affirmatively verified signature, because manifest URLs drive
-// real outbound requests.
+// without an affirmatively verified signature *from a sender the receiver
+// trusts*. A valid signature alone only proves "some key signed this" —
+// anyone can call generateSigningKey() and self-sign — so this example
+// explicitly checks the signer against a trusted-publisher key list before
+// extraction, the same bar `checkSandboxEligibility` holds M6's unsafe-HTML
+// path to (see packages/bootstrap/src/require-verified.ts).
 //
 // Run: npm run build && node examples/04-bootstrap-manifest.mjs
 
@@ -20,10 +24,28 @@ import {
 import { simulateTransport } from '@johnhenry/oat-sim';
 import assert from 'node:assert/strict';
 
+function toHex(bytes) {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * `@johnhenry/oat-protocol`'s `verifyArtifact` (what `simulateTransport`
+ * uses) has no notion of sender identity at all — only "is this signature
+ * cryptographically valid." A real receiver decides sender trust itself
+ * (e.g. against a pinned publisher key, or `@johnhenry/oat-receiver`'s
+ * `trustedPublicKeysHex`/TOFU flow) and folds that into the
+ * `BootstrapVerification` passed to `extractReleaseManifest`.
+ */
+function withSenderTrust(base, artifact, trustedKeysHex) {
+  const senderTrusted = Boolean(artifact.signature && trustedKeysHex.includes(toHex(artifact.signature.publicKey)));
+  return { ...base, senderTrusted };
+}
+
 // --- The release being distributed -----------------------------------------
 
 const releaseBytes = new TextEncoder().encode('pretend this is a 100 MB installer '.repeat(100));
-const { secretKey } = generateSigningKey();
+const { publicKey, secretKey } = generateSigningKey();
+const trustedPublisherKeysHex = [toHex(publicKey)]; // the receiver's pinned/known-good publisher key(s)
 
 const manifest = {
   version: 1,
@@ -60,13 +82,41 @@ console.log(`manifest artifact delivered optically (${run.packetsConsumedByRecei
 // Unsigned "manifest"? Extraction throws — it will not even parse the URLs.
 const unsignedRun = await simulateTransport({ artifact: artifactOptions, seed: 22 });
 await assert.rejects(
-  () => extractReleaseManifest(unsignedRun.reconstructedArtifact, unsignedRun.verification),
+  () =>
+    extractReleaseManifest(
+      unsignedRun.reconstructedArtifact,
+      withSenderTrust(unsignedRun.verification, unsignedRun.reconstructedArtifact, trustedPublisherKeysHex)
+    ),
   /refusing to process an unsigned or unverified artifact/
 );
 console.log('unsigned manifest: extractReleaseManifest refused (side effects need a verified signature)');
 
-// Signed and verified? Extraction proceeds.
-const received = await extractReleaseManifest(run.reconstructedArtifact, run.verification);
+// --- Receiver: the sender-identity gate -------------------------------------
+
+// Validly signed, but by a key the receiver doesn't recognize as the
+// publisher? Also refused — a valid signature alone only proves "some key
+// signed this," not that it's the key this receiver trusts.
+const { secretKey: impostorSecretKey } = generateSigningKey();
+const impostorRun = await simulateTransport({
+  artifact: { ...artifactOptions, sign: { secretKey: impostorSecretKey, keyId: 'impostor-key' } },
+  seed: 23,
+  requireSignature: true
+});
+await assert.rejects(
+  () =>
+    extractReleaseManifest(
+      impostorRun.reconstructedArtifact,
+      withSenderTrust(impostorRun.verification, impostorRun.reconstructedArtifact, trustedPublisherKeysHex)
+    ),
+  /refusing to process an artifact from an untrusted sender/
+);
+console.log('validly signed but untrusted-publisher manifest: extractReleaseManifest refused (signature alone is not identity)');
+
+// Signed by the trusted publisher key, and verified? Extraction proceeds.
+const received = await extractReleaseManifest(
+  run.reconstructedArtifact,
+  withSenderTrust(run.verification, run.reconstructedArtifact, trustedPublisherKeysHex)
+);
 assert.equal(received.releaseId, '1.2.3');
 console.log(`extracted manifest for ${received.name}@${received.releaseId} (${received.artifacts.length} artifact)`);
 

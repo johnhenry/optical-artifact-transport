@@ -102,6 +102,37 @@ describe('artifact envelope', () => {
     const restored = await extractPayload(artifact);
     expect(restored).toEqual(payload);
   });
+
+  /**
+   * Regression for the "gzip bomb" finding: a small, highly-compressible
+   * payload should not be able to expand to unbounded size during
+   * decompression. Builds a real artifact whose tiny compressed payload
+   * would inflate to 5,000,000 bytes, and asserts `extractPayload` refuses
+   * to fully decompress it once a size ceiling is in play — both via the
+   * caller-supplied `maxOutputBytes` and via the built-in default.
+   */
+  it('extractPayload aborts decompression of a payload that would exceed a size ceiling', async () => {
+    const huge = new Uint8Array(500_000).fill(97); // 'a' * 500,000 — extremely compressible
+    const artifact = await buildArtifact({ mediaType: 'application/octet-stream', payload: huge, compression: 'gzip' });
+
+    // Confirms this really is bomb-shaped: a tiny artifact claiming a much larger decompressed form.
+    expect(artifact.payload.length).toBeLessThan(5_000);
+
+    await expect(extractPayload(artifact, 100_000)).rejects.toThrow(/exceeds maximum allowed size/);
+
+    // A generous ceiling still lets a legitimate decompression through.
+    const restored = await extractPayload(artifact, 1_000_000);
+    expect(restored).toEqual(huge);
+  });
+
+  it('decompress() enforces its ceiling directly, independent of extractPayload', async () => {
+    const { compress, decompress } = await import('../src/compression.js');
+    const huge = new Uint8Array(500_000).fill(97);
+    const compressed = await compress(huge, 'gzip');
+
+    await expect(decompress(compressed, 'gzip', 100_000)).rejects.toThrow(/exceeds maximum allowed size/);
+    await expect(decompress(compressed, 'gzip')).resolves.toEqual(huge); // default ceiling (100 MiB) is generous enough
+  });
 });
 
 describe('canonical CBOR', () => {
