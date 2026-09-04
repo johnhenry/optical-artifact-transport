@@ -2,7 +2,8 @@ import { createCanvas } from '@napi-rs/canvas';
 import { describe, expect, it } from 'vitest';
 import { prepareSource, generatePackets, counterSeeds } from '../src/encoder.js';
 import { FountainDecoder } from '../src/decoder.js';
-import { renderPacketToCanvas, decodePacketFromImageData } from '../src/scheduler.js';
+import { renderPacketToCanvas } from '../src/qr-encode.js';
+import { decodePacketFromImageData } from '../src/qr-decode.js';
 
 /**
  * These tests exercise the *actual* screen->camera pipeline end to end:

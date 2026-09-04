@@ -9,6 +9,29 @@ packages are versioned together.
 
 ### Added
 
+- `@johnhenry/oat-qr-fountain` now publishes three subpath entrypoints —
+  `/fountain` (codec only), `/encode` (`qrcode`) and `/decode` (`jsqr`) —
+  so a sender never ships the QR decoder and a receiver never ships the QR
+  encoder. `<optical-send>`, `<optical-receive>` and `@johnhenry/oat-sim`
+  import through them. The package root still exports everything.
+
+### Fixed
+
+- **`@johnhenry/oat-qr-fountain` shipped both QR libraries to every
+  consumer.** `renderPacketToCanvas` and `decodePacketFromImageData` lived
+  in one module (`scheduler.ts`) that imported `qrcode` *and* `jsqr` at top
+  level. Neither of those packages declares `sideEffects`, so a bundler
+  could not prove the unused half unreachable and this package's own
+  `sideEffects: false` bought nothing: an encode-only import and a
+  decode-only import produced bundles of 55,128 and 55,195 bytes gzipped —
+  effectively identical. Split into `qr-encode.ts` / `qr-decode.ts`, an
+  encode-only import is now 9,798 bytes gzipped (−45,330, −82 %) and a
+  decode-only import 47,447 bytes (−7,748, −14 %). A whole-element bundle
+  of `<optical-send>` drops from 83,151 to 37,527 bytes gzipped, and
+  `<optical-receive>` from 85,337 to 77,748.
+
+### Added
+
 - Per-package READMEs for all seven packages (`@johnhenry/oat-protocol`,
   `-qr-fountain`, `-sim`, `-sender`, `-receiver`, `-ui`, `-bootstrap`):
   install, quick start, the traps worth knowing, API surface, and pointers

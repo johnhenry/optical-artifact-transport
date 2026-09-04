@@ -15,7 +15,7 @@ import {
   FountainDecoder,
   mulberry32,
   type OatPacket
-} from '@johnhenry/oat-qr-fountain';
+} from '@johnhenry/oat-qr-fountain/fountain';
 import { applyImpairments, type ImpairmentConfig } from './channel.js';
 
 export interface SimulateTransportOptions {

@@ -24,6 +24,18 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./encode": {
+      "types": "./dist/qr-encode.d.ts",
+      "import": "./dist/qr-encode.js"
+    },
+    "./decode": {
+      "types": "./dist/qr-decode.d.ts",
+      "import": "./dist/qr-decode.js"
+    },
+    "./fountain": {
+      "types": "./dist/fountain.d.ts",
+      "import": "./dist/fountain.js"
     }
   },
   "scripts": {

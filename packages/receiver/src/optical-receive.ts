@@ -7,7 +7,7 @@ import {
   type UiDecision,
   type UiDecisionStatus
 } from '@johnhenry/oat-protocol';
-import type { ImageDataLike } from '@johnhenry/oat-qr-fountain';
+import type { ImageDataLike } from '@johnhenry/oat-qr-fountain/decode';
 import { createCameraController, type CameraController, type FacingMode } from './camera-controller.js';
 import { createInlineDecodeWorker, type DecodeWorker } from './decode-worker.js';
 import { PacketStore } from './packet-store.js';

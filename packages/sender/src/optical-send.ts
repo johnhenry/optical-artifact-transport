@@ -7,10 +7,10 @@ import {
 import {
   prepareSource,
   generatePackets,
-  renderPacketToCanvas,
   type FountainSource,
   type OatPacket
-} from '@johnhenry/oat-qr-fountain';
+} from '@johnhenry/oat-qr-fountain/fountain';
+import { renderPacketToCanvas } from '@johnhenry/oat-qr-fountain/encode';
 import { resolveSource, type OpticalSource } from './source-adapters.js';
 import { buildUiProposal } from './ui-proposal-authoring.js';
 import { buildSenderArtifact } from './artifact-builder.js';
