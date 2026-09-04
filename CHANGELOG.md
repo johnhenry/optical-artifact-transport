@@ -9,6 +9,8 @@ packages are versioned together.
 
 ### Added
 
+- `max-scan-width` on `<optical-receive>` (default 1280) plus the
+  `scanFrameSize()` / `DEFAULT_MAX_SCAN_WIDTH` exports behind it.
 - `randomId()` in `@johnhenry/oat-protocol` — a v4 UUID from
   `crypto.randomUUID()` where that exists and from `crypto.getRandomValues()`
   where it does not.
@@ -20,6 +22,15 @@ packages are versioned together.
 
 ### Fixed
 
+- **`<optical-receive>` scanned every frame at the camera's native
+  resolution.** `#scanFrame()` sized its scan canvas to `video.videoWidth` /
+  `videoHeight` and handed all of those pixels to jsQR — on the main thread,
+  since `decode-worker.ts` is still inline — at 8 fps. Measured on Apple
+  silicon with a QR filling 70 % of frame height, one 1080p frame costs
+  34.5 ms of decode against a 125 ms budget, and a mid-range Android WebView
+  is several times slower again. Frames are now downscaled to at most
+  `max-scan-width` pixels wide (default 1280, `0` to scan natively), which
+  takes that 1080p frame to 15.4 ms.
 - **`crypto.randomUUID()` was called unconditionally, so the send path threw
   on iOS 15.0-15.3 and on every non-secure origin.** `crypto.randomUUID`
   landed in WebKit 15.4 and is a secure-context-only API, so it is `undefined`
