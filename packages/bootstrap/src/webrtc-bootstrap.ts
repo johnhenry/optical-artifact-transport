@@ -13,12 +13,46 @@ function serializePayload(payload: WebrtcBootstrapPayload): Uint8Array {
   return new TextEncoder().encode(JSON.stringify(payload));
 }
 
+/**
+ * Validates every field, not just `role`. What comes out of here is handed
+ * straight to `setRemoteDescription()` and `addIceCandidate()`, so a
+ * payload that parses but is the wrong shape has to be refused here rather
+ * than half-applied: `applyAnswerArtifact` sets the remote description
+ * before it iterates candidates, so a missing `candidates` array used to
+ * throw `TypeError: answer.candidates is not iterable` with the connection
+ * already mutated, and a `candidates` string used to iterate its characters
+ * into `addIceCandidate()` one at a time.
+ */
 function deserializePayload(bytes: Uint8Array): WebrtcBootstrapPayload {
-  const payload = JSON.parse(new TextDecoder().decode(bytes)) as WebrtcBootstrapPayload;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    throw new Error('webrtc-bootstrap: malformed payload (not JSON)');
+  }
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('webrtc-bootstrap: malformed payload (not an object)');
+  }
+
+  const payload = parsed as Partial<WebrtcBootstrapPayload>;
+
   if (payload.role !== 'offer' && payload.role !== 'answer') {
     throw new Error('webrtc-bootstrap: malformed payload (bad role)');
   }
-  return payload;
+  if (typeof payload.sdp !== 'string') {
+    throw new Error('webrtc-bootstrap: malformed payload (sdp is not a string)');
+  }
+  if (!Array.isArray(payload.candidates)) {
+    throw new Error('webrtc-bootstrap: malformed payload (candidates is not an array)');
+  }
+  for (const candidate of payload.candidates) {
+    if (typeof candidate !== 'object' || candidate === null) {
+      throw new Error('webrtc-bootstrap: malformed payload (candidate is not an object)');
+    }
+  }
+
+  return { role: payload.role, sdp: payload.sdp, candidates: payload.candidates };
 }
 
 /**

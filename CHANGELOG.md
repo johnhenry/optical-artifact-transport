@@ -9,6 +9,12 @@ packages are versioned together.
 
 ### Added
 
+- Coverage for `gatherIceCandidates`'s event-driven paths. The existing
+  `MockRTCPeerConnection` defines `addEventListener()` as an empty method
+  and reports `iceGatheringState === 'complete'`, so both of its tests took
+  a path that never registers a listener — candidate accumulation, the null
+  end-of-candidates signal, the `icegatheringstatechange` transition, and
+  the listener cleanup all had no coverage at all.
 - `max-scan-width` on `<optical-receive>` (default 1280) plus the
   `scanFrameSize()` / `DEFAULT_MAX_SCAN_WIDTH` exports behind it.
 - `randomId()` in `@johnhenry/oat-protocol` — a v4 UUID from
@@ -22,6 +28,17 @@ packages are versioned together.
 
 ### Fixed
 
+- **`@johnhenry/oat-bootstrap` validated one of the three fields it hands to
+  WebRTC.** `deserializePayload` checked `role` and returned the rest as-is,
+  so a verified artifact carrying `{"role":"answer","sdp":"v=0"}` reached
+  `applyAnswerArtifact`, applied the remote description, and *then* threw
+  `TypeError: answer.candidates is not iterable` with the connection already
+  mutated; `"candidates":"nope"` iterated the string's characters into
+  `addIceCandidate()`; a non-string `sdp` reached `setRemoteDescription()`;
+  and a `null` payload threw `TypeError: Cannot read properties of null`
+  instead of the module's own error. Every field is now checked before
+  anything touches the connection. The trusted-sender gate in front of this
+  means it was defence in depth rather than an authentication hole.
 - **`<optical-receive>` scanned every frame at the camera's native
   resolution.** `#scanFrame()` sized its scan canvas to `video.videoWidth` /
   `videoHeight` and handed all of those pixels to jsQR — on the main thread,
