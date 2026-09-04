@@ -1,6 +1,7 @@
 import {
   createCapabilityPolicy,
   buildUiDecisionArtifact,
+  randomId,
   type CapabilityPolicy,
   type OatArtifact,
   type BuildArtifactOptions,
@@ -376,7 +377,7 @@ export class OpticalReceiveElement extends HTMLElement {
       deniedCapabilities: denied,
       sanitized: status === 'accepted' && decision.outcome !== 'accept-unsafe',
       fallbackUsed: decision.outcome === 'downgrade',
-      capabilityToken: granted.length > 0 ? crypto.randomUUID() : undefined,
+      capabilityToken: granted.length > 0 ? randomId() : undefined,
       decidedAt: new Date().toISOString()
     };
   }

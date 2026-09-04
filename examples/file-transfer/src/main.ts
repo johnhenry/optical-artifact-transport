@@ -8,6 +8,7 @@ import {
   extractPayload,
   verifyArtifact,
   extractUiDecision,
+  randomId,
   type UiActionRequest,
   type UiProposalEnvelope
 } from '@johnhenry/oat-protocol';
@@ -313,7 +314,7 @@ $<HTMLButtonElement>('#prepare-btn').addEventListener('click', async () => {
     const proposal: UiProposalEnvelope = {
       type: 'ui.proposal',
       version: 1,
-      proposalId: crypto.randomUUID(),
+      proposalId: randomId(),
       origin: { id: 'demo-sender', label: 'Structured-form demo sender' },
       title: 'Schedule a follow-up',
       summary: 'A declarative form — no HTML at all.',
@@ -355,7 +356,7 @@ $<HTMLButtonElement>('#prepare-btn').addEventListener('click', async () => {
     const manifest = {
       version: 1 as const,
       name: 'demo-release',
-      releaseId: crypto.randomUUID(),
+      releaseId: randomId(),
       artifacts: [
         {
           name: 'release-fixture.txt',
@@ -386,7 +387,7 @@ $<HTMLButtonElement>('#prepare-btn').addEventListener('click', async () => {
     const proposal: UiProposalEnvelope = {
       type: 'ui.proposal',
       version: 1,
-      proposalId: crypto.randomUUID(),
+      proposalId: randomId(),
       origin: { id: 'demo-sender', label: 'Break-glass demo sender' },
       title: 'Break-glass demo',
       summary: 'Attempts an unauthorized capability and a parent-document read — both must be blocked.',
@@ -617,7 +618,7 @@ function buildIcs(title: string, date: string): string {
     'VERSION:2.0',
     'PRODID:-//optical-artifact-transport demo//EN',
     'BEGIN:VEVENT',
-    `UID:${crypto.randomUUID()}`,
+    `UID:${randomId()}`,
     `DTSTAMP:${dateStamp}`,
     `DTSTART;VALUE=DATE:${eventDate}`,
     `SUMMARY:${escape(title)}`,

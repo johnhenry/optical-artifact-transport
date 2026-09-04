@@ -9,6 +9,9 @@ packages are versioned together.
 
 ### Added
 
+- `randomId()` in `@johnhenry/oat-protocol` — a v4 UUID from
+  `crypto.randomUUID()` where that exists and from `crypto.getRandomValues()`
+  where it does not.
 - `@johnhenry/oat-qr-fountain` now publishes three subpath entrypoints —
   `/fountain` (codec only), `/encode` (`qrcode`) and `/decode` (`jsqr`) —
   so a sender never ships the QR decoder and a receiver never ships the QR
@@ -17,6 +20,16 @@ packages are versioned together.
 
 ### Fixed
 
+- **`crypto.randomUUID()` was called unconditionally, so the send path threw
+  on iOS 15.0-15.3 and on every non-secure origin.** `crypto.randomUUID`
+  landed in WebKit 15.4 and is a secure-context-only API, so it is `undefined`
+  both on those iOS versions and on any plain-`http:` origin — a LAN address
+  or a custom WebView scheme included — and `buildArtifact()`,
+  `buildUiProposal()` and `<optical-receive>`'s capability-token minting all
+  called it with no guard, taking down the whole path with
+  `TypeError: crypto.randomUUID is not a function`. All three now go through
+  the new `randomId()` in `@johnhenry/oat-protocol`, which falls back to
+  `crypto.getRandomValues()` — the same CSPRNG, with neither restriction.
 - **`@johnhenry/oat-qr-fountain` shipped both QR libraries to every
   consumer.** `renderPacketToCanvas` and `decodePacketFromImageData` lived
   in one module (`scheduler.ts`) that imported `qrcode` *and* `jsqr` at top

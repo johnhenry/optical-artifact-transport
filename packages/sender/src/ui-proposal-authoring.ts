@@ -1,10 +1,11 @@
-import type {
-  CapabilityRequest,
-  SafeHtmlView,
-  SanitizationProfile,
-  TextView,
-  UiProposalEnvelope,
-  UiRequestedProfile
+import {
+  randomId,
+  type CapabilityRequest,
+  type SafeHtmlView,
+  type SanitizationProfile,
+  type TextView,
+  type UiProposalEnvelope,
+  type UiRequestedProfile
 } from '@johnhenry/oat-protocol';
 
 export interface BuildUiProposalOptions {
@@ -58,7 +59,7 @@ export function buildUiProposal(options: BuildUiProposalOptions): UiProposalEnve
   return {
     type: 'ui.proposal',
     version: 1,
-    proposalId: crypto.randomUUID(),
+    proposalId: randomId(),
     origin: { id: options.originId, label: options.originLabel },
     title: options.title,
     summary: options.summary,
