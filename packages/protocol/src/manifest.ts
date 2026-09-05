@@ -8,6 +8,7 @@ import type { UiProposalEnvelope } from './ui-proposal.js';
 import { compress, decompress } from './compression.js';
 import { computeDigest, verifyDigest } from './digest.js';
 import { encodeCanonical } from './canonical-cbor.js';
+import { randomId } from './random-id.js';
 import { signPayload, verifySignature } from './signatures.js';
 
 export interface BuildArtifactOptions {
@@ -37,7 +38,7 @@ export async function buildArtifact(options: BuildArtifactOptions): Promise<OatA
 
   const base: SignablePayloadFields = {
     version: 1,
-    id: options.id ?? crypto.randomUUID(),
+    id: options.id ?? randomId(),
     createdAt: options.createdAt ?? new Date().toISOString(),
     expiresAt: options.expiresAt,
     mediaType: options.mediaType,

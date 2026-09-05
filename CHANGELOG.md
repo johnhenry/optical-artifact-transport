@@ -9,6 +9,70 @@ packages are versioned together.
 
 ### Added
 
+- Coverage for `gatherIceCandidates`'s event-driven paths. The existing
+  `MockRTCPeerConnection` defines `addEventListener()` as an empty method
+  and reports `iceGatheringState === 'complete'`, so both of its tests took
+  a path that never registers a listener — candidate accumulation, the null
+  end-of-candidates signal, the `icegatheringstatechange` transition, and
+  the listener cleanup all had no coverage at all.
+- `max-scan-width` on `<optical-receive>` (default 1280) plus the
+  `scanFrameSize()` / `DEFAULT_MAX_SCAN_WIDTH` exports behind it.
+- `randomId()` in `@johnhenry/oat-protocol` — a v4 UUID from
+  `crypto.randomUUID()` where that exists and from `crypto.getRandomValues()`
+  where it does not.
+- `@johnhenry/oat-qr-fountain` now publishes three subpath entrypoints —
+  `/fountain` (codec only), `/encode` (`qrcode`) and `/decode` (`jsqr`) —
+  so a sender never ships the QR decoder and a receiver never ships the QR
+  encoder. `<optical-send>`, `<optical-receive>` and `@johnhenry/oat-sim`
+  import through them. The package root still exports everything.
+
+### Fixed
+
+- **`@johnhenry/oat-bootstrap` validated one of the three fields it hands to
+  WebRTC.** `deserializePayload` checked `role` and returned the rest as-is,
+  so a verified artifact carrying `{"role":"answer","sdp":"v=0"}` reached
+  `applyAnswerArtifact`, applied the remote description, and *then* threw
+  `TypeError: answer.candidates is not iterable` with the connection already
+  mutated; `"candidates":"nope"` iterated the string's characters into
+  `addIceCandidate()`; a non-string `sdp` reached `setRemoteDescription()`;
+  and a `null` payload threw `TypeError: Cannot read properties of null`
+  instead of the module's own error. Every field is now checked before
+  anything touches the connection. The trusted-sender gate in front of this
+  means it was defence in depth rather than an authentication hole.
+- **`<optical-receive>` scanned every frame at the camera's native
+  resolution.** `#scanFrame()` sized its scan canvas to `video.videoWidth` /
+  `videoHeight` and handed all of those pixels to jsQR — on the main thread,
+  since `decode-worker.ts` is still inline — at 8 fps. Measured on Apple
+  silicon with a QR filling 70 % of frame height, one 1080p frame costs
+  34.5 ms of decode against a 125 ms budget, and a mid-range Android WebView
+  is several times slower again. Frames are now downscaled to at most
+  `max-scan-width` pixels wide (default 1280, `0` to scan natively), which
+  takes that 1080p frame to 15.4 ms.
+- **`crypto.randomUUID()` was called unconditionally, so the send path threw
+  on iOS 15.0-15.3 and on every non-secure origin.** `crypto.randomUUID`
+  landed in WebKit 15.4 and is a secure-context-only API, so it is `undefined`
+  both on those iOS versions and on any plain-`http:` origin — a LAN address
+  or a custom WebView scheme included — and `buildArtifact()`,
+  `buildUiProposal()` and `<optical-receive>`'s capability-token minting all
+  called it with no guard, taking down the whole path with
+  `TypeError: crypto.randomUUID is not a function`. All three now go through
+  the new `randomId()` in `@johnhenry/oat-protocol`, which falls back to
+  `crypto.getRandomValues()` — the same CSPRNG, with neither restriction.
+- **`@johnhenry/oat-qr-fountain` shipped both QR libraries to every
+  consumer.** `renderPacketToCanvas` and `decodePacketFromImageData` lived
+  in one module (`scheduler.ts`) that imported `qrcode` *and* `jsqr` at top
+  level. Neither of those packages declares `sideEffects`, so a bundler
+  could not prove the unused half unreachable and this package's own
+  `sideEffects: false` bought nothing: an encode-only import and a
+  decode-only import produced bundles of 55,128 and 55,195 bytes gzipped —
+  effectively identical. Split into `qr-encode.ts` / `qr-decode.ts`, an
+  encode-only import is now 9,798 bytes gzipped (−45,330, −82 %) and a
+  decode-only import 47,447 bytes (−7,748, −14 %). A whole-element bundle
+  of `<optical-send>` drops from 83,151 to 37,527 bytes gzipped, and
+  `<optical-receive>` from 85,337 to 77,748.
+
+### Added
+
 - Per-package READMEs for all seven packages (`@johnhenry/oat-protocol`,
   `-qr-fountain`, `-sim`, `-sender`, `-receiver`, `-ui`, `-bootstrap`):
   install, quick start, the traps worth knowing, API surface, and pointers

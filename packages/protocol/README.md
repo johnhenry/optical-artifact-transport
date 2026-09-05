@@ -65,6 +65,7 @@ machine-readable `reasons` (`'digest-mismatch'`, `'signature-invalid'`,
 | Envelope | `buildArtifact`, `verifyArtifact`, `extractPayload`, `isOatArtifact`, `OatArtifact`, `VerificationResult` |
 | Encoding | `encodeCanonical`, `decodeCanonical` (canonical CBOR — deterministic bytes for signing) |
 | Crypto | `generateSigningKey`, `signPayload`, `verifySignature`, `computeDigest`, `verifyDigest`, `constantTimeEqual` |
+| Ids | `randomId` — a v4 UUID via `crypto.randomUUID()` where it exists, via `crypto.getRandomValues()` where it does not |
 | Compression | `compress`, `decompress` (`'none'` \| `'gzip'`) |
 | Capabilities | `WELL_KNOWN_CAPABILITIES`, `intersectCapabilities`, `createCapabilityPolicy`, `CapabilityPolicy`, `CapabilityGrant` |
 | UI proposals | `UiProposalEnvelope`, `UiViewDescriptor` (`text`/`form`/`media`/`safe-html`/`sandboxed-html`), `SanitizationProfile` |

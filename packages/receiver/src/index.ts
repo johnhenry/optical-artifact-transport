@@ -1,5 +1,6 @@
 export * from './camera-controller.js';
 export * from './decode-worker.js';
+export * from './scan-scaling.js';
 export * from './packet-store.js';
 export * from './assembler.js';
 export * from './verifier.js';

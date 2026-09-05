@@ -62,9 +62,44 @@ receiver-rendered), or **accept-unsafe** (M6 break-glass). The knobs:
   setter** so the engine rebuild happens. If you extend the trust flow
   yourself, mutate via the setter, never the list directly — a stale engine
   once caused a newly-trusted sender's first M6 proposal to downgrade.
+- **The decode "worker" is not a worker yet.** `createInlineDecodeWorker()`
+  runs jsQR on the calling thread — the module's own docblock says so. Keep
+  `max-scan-width` and `scan-rate` in mind on slow devices; see the scan
+  cost section below.
 - **`checkCapability()` is meant to be re-checked at the point of use**
   (e.g. right before acting on a submitted form), not trusted from the
   original grant payload.
+
+## Scan cost — the one performance dial
+
+QR decode is linear in pixel count and, until `decode-worker.ts` grows a
+real `Worker` (it is inline today, and says so), it runs on the same thread
+as your UI. So the resolution frames are *scanned* at — not the resolution
+they are captured at — is what decides whether the loop fits its budget. At
+the default `scan-rate` of 8 fps that budget is 125 ms per frame. Measured
+on Apple silicon with a QR filling 70 % of frame height:
+
+| Scanned at | jsQR decode |
+| --- | --- |
+| 1920x1080 | 34.5 ms |
+| 1280x720 | 18.4 ms |
+| 960x540 | 12.6 ms |
+| 640x480 | 7.7 ms |
+
+A mid-range Android WebView is several times slower than that host, so a
+native-resolution 1080p scan is the case that saturates the main thread.
+
+`max-scan-width` (default **1280**) caps the scan resolution; frames are
+downscaled with the aspect ratio preserved, and `max-scan-width="0"` scans
+natively. The default only ever touches captures wider than 720p and lands
+them exactly at 720p, so it cannot decode worse than a configuration this
+element is already used in. Lower values are faster and cost decode margin:
+measured here, a QR filling only 40 % of a 720p frame stops decoding once
+the scan is downscaled to 640 wide.
+
+```html
+<optical-receive scan-rate="8" max-scan-width="960"></optical-receive>
+```
 
 ## API surface
 
@@ -82,7 +117,8 @@ no camera), `approveCapabilities()`, `checkCapability()`,
 `rejectUnknownSender()`, `buildDecisionArtifact(sign?)` (the signed
 `ui.decision` acknowledgment to send back).
 
-**Also exported**: `PolicyEngine`, `verifyReceivedArtifact`, the camera
+**Also exported**: `PolicyEngine`, `verifyReceivedArtifact`, `scanFrameSize` /
+`DEFAULT_MAX_SCAN_WIDTH`, the camera
 controller / decode worker / packet store / assembler internals, and
 `defineOpticalReceive(tagName?)`.
 

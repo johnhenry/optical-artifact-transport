@@ -61,6 +61,37 @@ until the generator does, because it won't.
   pass `counterSeeds()` (or any deterministic seed source) to
   `generatePackets` for reproducible fixtures.
 
+## Entrypoints — import only the half you use
+
+`qrcode` (the encoder) and `jsqr` (the decoder) are both large, and almost
+no application needs both: a sender only renders, a receiver only scans.
+Three subpath entrypoints keep the other one out of your bundle entirely.
+
+| Entrypoint | Contains | Pulls in |
+| --- | --- | --- |
+| `@johnhenry/oat-qr-fountain/fountain` | packet framing, LT code, encoder/decoder, `PacketCycle` | neither |
+| `@johnhenry/oat-qr-fountain/encode` | `renderPacketToCanvas`, `renderPacketToDataUrl` | `qrcode` |
+| `@johnhenry/oat-qr-fountain/decode` | `decodePacketFromImageData` | `jsqr` |
+| `@johnhenry/oat-qr-fountain` | all of the above | both, minus whatever your bundler shakes out |
+
+```js
+// sender: renders frames, never scans them
+import { prepareSource, generatePackets } from '@johnhenry/oat-qr-fountain/fountain';
+import { renderPacketToCanvas } from '@johnhenry/oat-qr-fountain/encode';
+
+// receiver: scans frames, never renders them
+import { FountainDecoder } from '@johnhenry/oat-qr-fountain/fountain';
+import { decodePacketFromImageData } from '@johnhenry/oat-qr-fountain/decode';
+```
+
+Measured with esbuild (minified, gzip -9), an encode-only import is
+**9.6 KB** and a decode-only import **46.3 KB**; before the split both were
+**~54 KB**, because a single module imported `qrcode` and `jsqr` at top
+level and neither of those packages declares `sideEffects`, so no bundler
+could prove the unused half unreachable. The package root now tree-shakes
+correctly too — the subpaths matter most for Node and for bundlers that
+ignore `sideEffects`, where nothing is shaken out at all.
+
 ## API surface
 
 | Area | Exports |

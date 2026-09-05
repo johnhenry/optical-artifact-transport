@@ -1,15 +1,17 @@
 import {
   createCapabilityPolicy,
   buildUiDecisionArtifact,
+  randomId,
   type CapabilityPolicy,
   type OatArtifact,
   type BuildArtifactOptions,
   type UiDecision,
   type UiDecisionStatus
 } from '@johnhenry/oat-protocol';
-import type { ImageDataLike } from '@johnhenry/oat-qr-fountain';
+import type { ImageDataLike } from '@johnhenry/oat-qr-fountain/decode';
 import { createCameraController, type CameraController, type FacingMode } from './camera-controller.js';
 import { createInlineDecodeWorker, type DecodeWorker } from './decode-worker.js';
+import { DEFAULT_MAX_SCAN_WIDTH, scanFrameSize } from './scan-scaling.js';
 import { PacketStore } from './packet-store.js';
 import { assembleArtifact } from './assembler.js';
 import { verifyReceivedArtifact, toHex, type ReceiverVerificationResult } from './verifier.js';
@@ -376,7 +378,7 @@ export class OpticalReceiveElement extends HTMLElement {
       deniedCapabilities: denied,
       sanitized: status === 'accepted' && decision.outcome !== 'accept-unsafe',
       fallbackUsed: decision.outcome === 'downgrade',
-      capabilityToken: granted.length > 0 ? crypto.randomUUID() : undefined,
+      capabilityToken: granted.length > 0 ? randomId() : undefined,
       decidedAt: new Date().toISOString()
     };
   }
@@ -436,14 +438,37 @@ export class OpticalReceiveElement extends HTMLElement {
     this.#timer = setInterval(() => this.#scanFrame(), 1000 / scanRate);
   }
 
+  /**
+   * The scan resolution, in pixels of width, that a camera frame is
+   * downscaled to before the QR decoder sees it — the `max-scan-width`
+   * attribute, defaulting to `DEFAULT_MAX_SCAN_WIDTH` (1280). Set it to `0`
+   * to scan at the camera's native resolution.
+   *
+   * See `scan-scaling.ts` for the measurements behind the default and for
+   * what lower values cost in decode margin.
+   */
+  get maxScanWidth(): number {
+    const attribute = this.getAttribute('max-scan-width');
+    if (attribute === null) return DEFAULT_MAX_SCAN_WIDTH;
+    const parsed = Number(attribute);
+    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
+  }
+
   #scanFrame(): void {
     if (!this.#video.videoWidth || !this.#video.videoHeight) return;
-    this.#scanCanvas.width = this.#video.videoWidth;
-    this.#scanCanvas.height = this.#video.videoHeight;
+
+    const { width, height } = scanFrameSize(
+      this.#video.videoWidth,
+      this.#video.videoHeight,
+      this.maxScanWidth
+    );
+
+    this.#scanCanvas.width = width;
+    this.#scanCanvas.height = height;
     const ctx = this.#scanCanvas.getContext('2d');
     if (!ctx) return;
-    ctx.drawImage(this.#video, 0, 0);
-    const image = ctx.getImageData(0, 0, this.#scanCanvas.width, this.#scanCanvas.height);
+    ctx.drawImage(this.#video, 0, 0, width, height);
+    const image = ctx.getImageData(0, 0, width, height);
     this.processFrame(image);
   }
 

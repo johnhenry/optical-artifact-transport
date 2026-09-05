@@ -3,6 +3,7 @@ export * from './capabilities.js';
 export * from './ui-proposal.js';
 export * from './canonical-cbor.js';
 export * from './digest.js';
+export * from './random-id.js';
 export * from './signatures.js';
 export * from './compression.js';
 export * from './manifest.js';
