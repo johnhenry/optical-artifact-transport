@@ -60,9 +60,52 @@ export interface VerificationResult {
   valid: boolean;
   digestValid: boolean;
   signatureValid: boolean | 'absent';
+  /**
+   * True when the artifact must not be used on lifetime grounds: either its
+   * `expiresAt` is in the past, or it is present and cannot be read as an
+   * instant. `reasons` distinguishes the two (`'expired'` vs
+   * `'expires-at-unreadable'`).
+   */
   expired: boolean;
   /** Machine-readable failure reasons, e.g. ['digest-mismatch', 'expired']. */
   reasons: string[];
+}
+
+/**
+ * An ISO-8601 calendar date, which every value `buildArtifact` produces
+ * begins with (`new Date().toISOString()`), and which `Date.parse` is
+ * required by the language spec to interpret consistently. Anything else
+ * `Date.parse` accepts is implementation-defined: V8 reads the string
+ * `'42'` as the year 2042 — in local time, no less — so a field a sender
+ * filled in as a duration, or a CBOR integer coerced by `String()`, buys
+ * a sixteen-year lifetime instead of failing.
+ */
+const ISO_DATE_PREFIX = /^\d{4}-\d{2}-\d{2}(?:[T ]|$)/;
+
+/**
+ * Decides the lifetime component of verification, failing closed.
+ *
+ * `expiresAt` used to be read as
+ * `Boolean(artifact.expiresAt && Date.now() > Date.parse(artifact.expiresAt))`,
+ * which treats every unreadable value as "does not expire":
+ * `Date.parse` returns `NaN` for `'not-a-date'` and for `''`, and
+ * `NaN > x` is `false`. `expiresAt` is one of the design doc's named core
+ * controls ("Expiry, nonce, and session binding") against its listed
+ * "Payload replay" threat, and it is the only one of those three that
+ * exists in the code at all — so an unreadable value silently disabling it
+ * is the wrong direction to fail in.
+ *
+ * Absent is still absent: an artifact with no `expiresAt` does not expire,
+ * which is the documented optional-field behaviour and unchanged.
+ */
+function evaluateExpiry(expiresAt: unknown): { expired: boolean; reason?: string } {
+  if (expiresAt === undefined || expiresAt === null) return { expired: false };
+  if (typeof expiresAt !== 'string' || !ISO_DATE_PREFIX.test(expiresAt)) {
+    return { expired: true, reason: 'expires-at-unreadable' };
+  }
+  const at = Date.parse(expiresAt);
+  if (Number.isNaN(at)) return { expired: true, reason: 'expires-at-unreadable' };
+  return Date.now() > at ? { expired: true, reason: 'expired' } : { expired: false };
 }
 
 /**
@@ -87,8 +130,9 @@ export function verifyArtifact(
     reasons.push('signature-required');
   }
 
-  const expired = Boolean(artifact.expiresAt && Date.now() > Date.parse(artifact.expiresAt));
-  if (expired) reasons.push('expired');
+  const expiry = evaluateExpiry(artifact.expiresAt);
+  const expired = expiry.expired;
+  if (expiry.reason) reasons.push(expiry.reason);
 
   const signatureOk = artifact.signature ? signatureValid === true : !opts.requireSignature;
   const valid = digestValid && signatureOk && !expired;

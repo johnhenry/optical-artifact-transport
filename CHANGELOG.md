@@ -23,6 +23,31 @@ packages are versioned together.
   (which remains the full PRD), plus a package table linking the
   per-package READMEs.
 
+### Fixed
+
+- **`@johnhenry/oat-protocol`: artifact expiry failed open on any value
+  `Date.parse` could not read.** `verifyArtifact` evaluated it as
+  `Boolean(artifact.expiresAt && Date.now() > Date.parse(artifact.expiresAt))`,
+  and `NaN > x` is `false`, so `'not-a-date'`, `''` and `'2026-13-45'` all
+  produced `expired: false`, `valid: true`, `reasons: []` — an artifact that
+  silently never expires, with nothing anywhere saying the field was
+  unreadable. `isOatArtifact` does not inspect `expiresAt` at all, so
+  non-strings survive assembly off the camera too, and `Date.parse` coerces
+  them with `String()`: measured on V8, `Date.parse(42)` is
+  `2042-01-01T08:00:00Z`, a sixteen-year lifetime from one byte on the wire.
+
+  `expiresAt` now fails closed. It must be a string beginning with an
+  ISO-8601 calendar date (which is what `buildArtifact` emits, and the one
+  form `Date.parse` is specified to read consistently); anything else, or
+  anything that still parses to `NaN`, is reported as
+  `expires-at-unreadable` and the artifact does not verify. Absent is
+  unchanged: an artifact with no `expiresAt` still does not expire.
+
+  This matters because expiry is the *only* one of the design doc's three
+  named controls against its listed "Payload replay" threat ("Expiry, nonce,
+  and session binding") that exists in the code — `grep -rn nonce
+  packages/*/src` finds nothing.
+
 ## [0.1.0] — 2026-08-14
 
 First release under the `@johnhenry` scope, published to npm on 2026-08-14
