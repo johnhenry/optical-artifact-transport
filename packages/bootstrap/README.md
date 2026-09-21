@@ -1,5 +1,8 @@
 # @johnhenry/oat-bootstrap
 
+[![npm version](https://img.shields.io/npm/v/%40johnhenry%2Foat-bootstrap.svg)](https://www.npmjs.com/package/@johnhenry/oat-bootstrap)
+[![license](https://img.shields.io/npm/l/%40johnhenry%2Foat-bootstrap.svg)](LICENSE)
+
 M5 bootstrap workflows: a small, signed optical artifact unlocks a faster
 follow-on transport that wouldn't otherwise have a trust anchor. Two
 workflows ship — a verified release-manifest fetch (digest-checked,

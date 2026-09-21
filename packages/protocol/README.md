@@ -1,5 +1,8 @@
 # @johnhenry/oat-protocol
 
+[![npm version](https://img.shields.io/npm/v/%40johnhenry%2Foat-protocol.svg)](https://www.npmjs.com/package/@johnhenry/oat-protocol)
+[![license](https://img.shields.io/npm/l/%40johnhenry%2Foat-protocol.svg)](LICENSE)
+
 The wire and trust layer under every other OAT package: the artifact
 envelope, canonical CBOR encoding, SHA-256 digests, Ed25519 signatures, the
 capability model, the UI proposal grammar, M6 sandbox eligibility, and the

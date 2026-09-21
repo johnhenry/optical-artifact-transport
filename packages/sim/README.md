@@ -1,5 +1,8 @@
 # @johnhenry/oat-sim
 
+[![npm version](https://img.shields.io/npm/v/%40johnhenry%2Foat-sim.svg)](https://www.npmjs.com/package/@johnhenry/oat-sim)
+[![license](https://img.shields.io/npm/l/%40johnhenry%2Foat-sim.svg)](LICENSE)
+
 The transport simulator: runs a full sender → channel → receiver OAT
 transfer purely in software — no camera, no display, no canvas. That's the
 whole point: it exercises the exact same `@johnhenry/oat-protocol` +

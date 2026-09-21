@@ -1,5 +1,8 @@
 # @johnhenry/oat-qr-fountain
 
+[![npm version](https://img.shields.io/npm/v/%40johnhenry%2Foat-qr-fountain.svg)](https://www.npmjs.com/package/@johnhenry/oat-qr-fountain)
+[![license](https://img.shields.io/npm/l/%40johnhenry%2Foat-qr-fountain.svg)](LICENSE)
+
 LT (Luby Transform) fountain coding plus QR frame render/decode — the wire
 format underneath `<optical-send>` and `<optical-receive>`. An artifact
 becomes an endless stream of independently-decodable packets: the receiver

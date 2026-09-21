@@ -1,5 +1,8 @@
 # @johnhenry/oat-sender
 
+[![npm version](https://img.shields.io/npm/v/%40johnhenry%2Foat-sender.svg)](https://www.npmjs.com/package/@johnhenry/oat-sender)
+[![license](https://img.shields.io/npm/l/%40johnhenry%2Foat-sender.svg)](LICENSE)
+
 `<optical-send>` — a custom element that builds a signed `OatArtifact` from
 whatever you hand it and renders it as an endless, independently-decodable
 sequence of fountain-coded QR frames for a camera on another device to pick

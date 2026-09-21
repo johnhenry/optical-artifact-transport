@@ -1,5 +1,8 @@
 # @johnhenry/oat-ui
 
+[![npm version](https://img.shields.io/npm/v/%40johnhenry%2Foat-ui.svg)](https://www.npmjs.com/package/@johnhenry/oat-ui)
+[![license](https://img.shields.io/npm/l/%40johnhenry%2Foat-ui.svg)](LICENSE)
+
 Receiver-owned rendering for sender-proposed UI: the pinned allowlist
 sanitizer, the safe-view and safe-html renderers, the capability and trust
 prompts, and the M6 sandbox host with its typed iframe bridge. The rule this

@@ -1,5 +1,8 @@
 # @johnhenry/oat-receiver
 
+[![npm version](https://img.shields.io/npm/v/%40johnhenry%2Foat-receiver.svg)](https://www.npmjs.com/package/@johnhenry/oat-receiver)
+[![license](https://img.shields.io/npm/l/%40johnhenry%2Foat-receiver.svg)](LICENSE)
+
 `<optical-receive>` — a custom element that points a camera at an
 `<optical-send>` screen, fountain-decodes the frames into an artifact,
 verifies its digest/signature/expiry, and runs any sender-proposed UI
