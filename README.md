@@ -1,5 +1,10 @@
 # Optical Artifact Transport (OAT)
 
+[![CI](https://github.com/johnhenry/optical-artifact-transport/actions/workflows/test.yml/badge.svg)](https://github.com/johnhenry/optical-artifact-transport/actions/workflows/test.yml)
+[![license](https://img.shields.io/npm/l/%40johnhenry%2Foat-protocol.svg)](LICENSE)
+
+Full documentation: [opensource.johnhenry.me/oat](https://opensource.johnhenry.me/oat/)
+
 A browser-native, capability-safe physical transport for moving signed state,
 structured artifacts, and optionally negotiated UI across devices using only
 a display and a camera.
@@ -14,6 +19,15 @@ This is not a replacement for AirDrop, Nearby Share, or HTTPS. It targets
 payloads too large for a single QR code where zero-setup handoff, physical
 locality, air-gap compatibility, or trust bootstrapping matter more than raw
 throughput.
+
+## Contents
+
+- [Status](#status)
+- [Architecture](#architecture)
+- [Packages](#packages)
+- [Examples](#examples)
+- [Development](#development)
+- [Security model](#security-model)
 
 ## Status
 
@@ -179,8 +193,6 @@ The layering that keeps this maintainable:
 | [`packages/bootstrap`](packages/bootstrap/README.md) | `@johnhenry/oat-bootstrap` | M5 bootstrap workflows: release-manifest fetch+verify, WebRTC offer/answer |
 | [`examples/file-transfer`](examples/file-transfer) | (not published) | Live demo wiring sender + receiver together: M5/M6 flows, the `ui.decision` round trip, arbitrary file transfer, a declarative form proposal, live receiver policy presets, a capability with a real (downloadable) effect |
 
-Full documentation lives at <https://opensource.johnhenry.me/oat/>.
-
 ## Examples
 
 Numbered, headless examples live in [`examples/`](examples/README.md) —
@@ -210,43 +222,65 @@ npm test
 npm run dev:demo   # examples/file-transfer on localhost
 ```
 
-## Security model (summary)
+## Security model
 
-- Every artifact carries a digest and an optional Ed25519 signature; the
-  receiver never delivers unverified bytes to the host app.
-- A sender may *propose* a UI (`UiProposalEnvelope`), but the receiver always
-  owns rendering. Outcomes are: reject, downgrade to fallback, accept-safe
-  (sanitized, receiver-rendered), or accept-unsafe (M6 break-glass — see
-  below).
-- Effective capabilities are always
-  `sender requested ∩ receiver policy ∩ user-approved grants`. Rendering is
-  never authority — declarative actions only carry typed, receiver-mediated
-  requests, never remote code or DOM handles.
-- **M6 unsafe-HTML eligibility** (`checkSandboxEligibility`) requires *all*
-  of: a verified signature, the signer being on the receiver's explicit
+Every payload that crosses the optical channel is a signed, verified
+artifact before anything downstream of the receiver ever sees it — the
+line between "OAT enforces this" and "the deployer must still decide this"
+is drawn precisely below.
+
+**What OAT guarantees:**
+
+- **Unverified bytes never reach the host app.** Every artifact carries a
+  digest and an optional Ed25519 signature; the receiver checks both before
+  delivery, not after.
+- **Rendering is never authority.** A sender may *propose* a UI
+  (`UiProposalEnvelope`), but the receiver always owns rendering, with
+  exactly four outcomes: reject, downgrade to fallback, accept-safe
+  (sanitized, receiver-rendered), or accept-unsafe (M6 break-glass — below).
+  Effective capabilities are always
+  `sender requested ∩ receiver policy ∩ user-approved grants`; declarative
+  actions only carry typed, receiver-mediated requests, never remote code or
+  DOM handles.
+- **M6 unsafe-HTML eligibility is triple-gated** (`checkSandboxEligibility`):
+  a verified signature, the signer being on the receiver's explicit
   `trustedPublicKeys` list (a valid signature alone only proves *some* key
   signed it — anyone can generate one), and the receiver deployment setting
-  `allowUnsafeHtml`. Any one of these missing downgrades to the fallback
-  view instead. The mounted iframe's sandbox tokens don't gate
-  self-navigation (a known limitation of the iframe sandbox model); the host
-  detects it out-of-band (a second `load` event after the initial `srcdoc`
-  render) and tears the frame down immediately rather than let it run with
-  an un-enforced CSP.
-- **M5 bootstrap functions** (`extractReleaseManifest`,
-  `extractWebrtcBootstrapPayload`, and the `createAnswerArtifact`/
-  `applyAnswerArtifact` that call it) refuse to run on anything without an
-  affirmatively verified signature — these trigger real side effects (an
-  HTTP fetch, applying WebRTC session data), so they enforce this
-  themselves rather than trusting every caller to check first. Release-manifest
-  URLs are additionally restricted to `https:` by default
-  (`allowedUrlSchemes`) as an SSRF guard, mirroring `@johnhenry/oat-ui`'s sanitizer.
-- **`ui.decision` artifacts** are subject to the same rule: `extractUiDecision`
+  `allowUnsafeHtml`. Any one missing downgrades to the fallback view instead
+  — there is no mode that skips this check. The mounted iframe's sandbox
+  tokens don't gate self-navigation (a known limitation of the iframe
+  sandbox model, not an OAT bug); the host detects it out-of-band (a second
+  `load` event after the initial `srcdoc` render) and tears the frame down
+  immediately rather than let it run with an un-enforced CSP.
+- **M5 bootstrap side effects require a verified signature first.**
+  `extractReleaseManifest`, `extractWebrtcBootstrapPayload`, and the
+  `createAnswerArtifact`/`applyAnswerArtifact` that call it trigger real
+  side effects (an HTTP fetch, applying WebRTC session data), so they check
+  the signature themselves rather than trusting every caller to check
+  first. Release-manifest URLs are additionally restricted to `https:` by
+  default (`allowedUrlSchemes`) as an SSRF guard, mirroring
+  `@johnhenry/oat-ui`'s sanitizer.
+- **`ui.decision` artifacts follow the same rule.** `extractUiDecision`
   refuses anything without a verified signature, since a decision claims
   capabilities were granted.
-- **Trusted Types**: hosts that enable `Content-Security-Policy:
-  require-trusted-types-for 'script'` must add `trusted-types
-  oat-sandbox-srcdoc` (or `trusted-types *`) to their policy for the M6
-  iframe's `srcdoc` assignment to keep working — see
-  `packages/ui/src/trusted-types.ts`.
+
+**What is still yours:**
+
+- **Trusting a new sender's key is a deployer/user decision, not an OAT
+  default.** A digest-valid, signature-valid artifact from a key not yet on
+  `trustedPublicKeys` surfaces as an `unknown-sender` receiver state rather
+  than being silently trusted or silently rejected — `trustSenderAndContinue()`
+  / `rejectUnknownSender()` decide it. OAT gives you the fingerprint prompt
+  primitive (`renderTrustPrompt()`); it does not make the trust call for you.
+- **`allowUnsafeHtml` is opt-in per receiver deployment.** The M6 break-glass
+  path is unreachable unless the deployment explicitly turns it on — turning
+  it on is a risk the deployer owns, not something OAT can validate on your
+  behalf.
+- **Trusted Types wiring is the host's responsibility.** Hosts that enable
+  `Content-Security-Policy: require-trusted-types-for 'script'` must add
+  `trusted-types oat-sandbox-srcdoc` (or `trusted-types *`) to their own
+  policy for the M6 iframe's `srcdoc` assignment to keep working — see
+  `packages/ui/src/trusted-types.ts`. OAT ships the policy name; it can't
+  add it to a host's CSP header for them.
 
 See `docs/design.md` for the full PRD this implementation follows.

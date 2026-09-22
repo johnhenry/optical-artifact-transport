@@ -3,7 +3,7 @@
 Short rulebook for anyone (human or agent) working in this repo. Modeled on
 the pattern established in `math-plus`'s `AGENTS.md`.
 
-## The verification loop (before considering anything done)
+## The verification loop (before every push)
 
 1. `npm run build` — plain npm workspaces (`npm run build --workspaces
    --if-present`), **not** Turbo. There is no dependency graph enforcing

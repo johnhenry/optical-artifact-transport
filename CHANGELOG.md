@@ -7,6 +7,22 @@ packages are versioned together.
 
 ## [Unreleased]
 
+### Documentation
+
+- Root README: added the CI/license badge row and a literal `Full
+  documentation:` line at the top (previously only a plain-text mention
+  near the bottom), and `## Contents` (over 8 KB). Reshaped
+  `## Security model (summary)` into the family-standard `## Security
+  model` with `**What OAT guarantees:**` / `**What is still yours:**`
+  bold lead-ins — all existing content preserved, split by which side of
+  the responsibility line it falls on.
+- `AGENTS.md`: renamed the near-miss heading `## The verification loop
+  (before considering anything done)` to the settled family string
+  `## The verification loop (before every push)` (flagged in the
+  ecosystem-cohesion plan's Phase 1 audit).
+- `package.json`: added the `homepage` field
+  (`opensource.johnhenry.me/oat/`), which had never been set.
+
 ### Added
 
 - Coverage for `gatherIceCandidates`'s event-driven paths. The existing
