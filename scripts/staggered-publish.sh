@@ -2,9 +2,17 @@
 #
 # Staggered Publish Script for the optical-artifact-transport monorepo
 #
-# Publishes all 7 @johnhenry/oat-* packages to npm in dependency order
-# with delays to avoid rate limiting. examples/file-transfer is a private
-# demo and is never published.
+# Publishes every non-private @johnhenry/oat-* package to npm in
+# dependency order with delays to avoid rate limiting. examples/file-transfer
+# is a private demo and is never published.
+#
+# The batch order itself is NOT hardcoded here -- it's derived at runtime
+# from the real workspace dependency graph by
+# scripts/derive-publish-order.mjs (a topological sort over each package's
+# own `dependencies`). A hardcoded batch list silently rots when a package
+# is added or its internal dependencies change; deriving it means this
+# script self-corrects instead. (Same failure mode math-plus hit in its
+# own hand-rolled JSR-publish loop -- see issue #47 there.)
 #
 # Usage:
 #   ./scripts/staggered-publish.sh           # Full publish
@@ -47,7 +55,7 @@ publish_package() {
   local pkg=$1
   TOTAL=$((TOTAL + 1))
 
-  echo -e "${BLUE}[$TOTAL/7]${NC} Publishing ${YELLOW}$pkg${NC}..."
+  echo -e "${BLUE}[$TOTAL/$TOTAL_PACKAGES]${NC} Publishing ${YELLOW}$pkg${NC}..."
 
   if $DRY_RUN; then
     npm publish --workspace="$pkg" --access public --provenance --dry-run
@@ -94,15 +102,42 @@ publish_batch() {
   done
 }
 
-echo ""
-echo "optical-artifact-transport staggered publish"
-echo "Publishing 7 packages in dependency order"
-echo "Delay between packages: ${DELAY_BETWEEN_PACKAGES}s, between batches: ${DELAY_BETWEEN_BATCHES}s"
-
 if [ ! -f "package.json" ]; then
   echo -e "${RED}Error: Must run from repository root${NC}"
   exit 1
 fi
+
+# ============================================================================
+# Derive the batch order from the real workspace dependency graph instead
+# of a hardcoded list (see header comment above).
+# ============================================================================
+BATCH_OUTPUT=$(node scripts/derive-publish-order.mjs) || {
+  echo -e "${RED}Error: failed to derive a publish order (see error above, e.g. a dependency cycle)${NC}"
+  exit 1
+}
+
+# `mapfile`/`readarray` isn't available on bash 3.2 (macOS's default
+# /bin/bash), so build the array with a portable read loop instead.
+BATCHES=()
+while IFS= read -r line; do
+  [ -n "$line" ] && BATCHES+=("$line")
+done <<< "$BATCH_OUTPUT"
+
+if [ ${#BATCHES[@]} -eq 0 ]; then
+  echo -e "${RED}Error: derive-publish-order.mjs found no publishable packages${NC}"
+  exit 1
+fi
+
+TOTAL_PACKAGES=0
+for batch_line in "${BATCHES[@]}"; do
+  read -ra pkgs <<< "$batch_line"
+  TOTAL_PACKAGES=$((TOTAL_PACKAGES + ${#pkgs[@]}))
+done
+
+echo ""
+echo "optical-artifact-transport staggered publish"
+echo "Publishing $TOTAL_PACKAGES packages in dependency order across ${#BATCHES[@]} batch(es)"
+echo "Delay between packages: ${DELAY_BETWEEN_PACKAGES}s, between batches: ${DELAY_BETWEEN_BATCHES}s"
 
 echo ""
 echo -e "${YELLOW}Building all packages...${NC}"
@@ -111,24 +146,17 @@ if ! $DRY_RUN; then
 fi
 echo -e "${GREEN}Build complete!${NC}"
 
-# ============================================================================
-# BATCH 1: no internal @johnhenry/oat-* dependencies
-# ============================================================================
-publish_batch "Core (no internal deps)" \
-  "@johnhenry/oat-protocol" \
-  "@johnhenry/oat-qr-fountain"
+batch_num=0
+for batch_line in "${BATCHES[@]}"; do
+  batch_num=$((batch_num + 1))
+  read -ra pkgs <<< "$batch_line"
 
-wait_between "$DELAY_BETWEEN_BATCHES"
+  if [ "$batch_num" -gt 1 ]; then
+    wait_between "$DELAY_BETWEEN_BATCHES"
+  fi
 
-# ============================================================================
-# BATCH 2: depend on protocol and/or qr-fountain
-# ============================================================================
-publish_batch "Dependents" \
-  "@johnhenry/oat-sim" \
-  "@johnhenry/oat-sender" \
-  "@johnhenry/oat-receiver" \
-  "@johnhenry/oat-ui" \
-  "@johnhenry/oat-bootstrap"
+  publish_batch "Batch $batch_num/${#BATCHES[@]}" "${pkgs[@]}"
+done
 
 # ============================================================================
 # Summary
