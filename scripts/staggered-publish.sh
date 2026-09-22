@@ -50,11 +50,11 @@ publish_package() {
   echo -e "${BLUE}[$TOTAL/7]${NC} Publishing ${YELLOW}$pkg${NC}..."
 
   if $DRY_RUN; then
-    npm publish --workspace="$pkg" --access public --dry-run
+    npm publish --workspace="$pkg" --access public --provenance --dry-run
     SUCCESS=$((SUCCESS + 1))
   else
     local output
-    if output=$(npm publish --workspace="$pkg" --access public 2>&1); then
+    if output=$(npm publish --workspace="$pkg" --access public --provenance 2>&1); then
       echo "$output"
       echo -e "  ${GREEN}Published successfully${NC}"
       SUCCESS=$((SUCCESS + 1))
@@ -150,7 +150,7 @@ if [ ${#FAILED_PACKAGES[@]} -gt 0 ]; then
   echo ""
   echo "To retry failed packages:"
   for pkg in "${FAILED_PACKAGES[@]}"; do
-    echo "  npm publish --workspace=$pkg --access public"
+    echo "  npm publish --workspace=$pkg --access public --provenance"
   done
   exit 1
 fi
