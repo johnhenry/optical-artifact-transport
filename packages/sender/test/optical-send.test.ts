@@ -98,6 +98,45 @@ describe('<optical-send> artifact preparation', () => {
     expect(proposal?.fallbackView).toEqual({ kind: 'text', body: '<p>Fallback text</p>' });
   });
 
+  it('parses proposal markup for capability extraction via DOMParser, not a live-document element (issue #22)', async () => {
+    // happy-dom (this suite's environment) doesn't actually attempt image
+    // loads, so an <img onerror> repro can't be observed as a side effect
+    // here the way it is in a real browser -- instead, assert the
+    // implementation property the fix actually relies on: parsing goes
+    // through DOMParser (whose output document is never attached to, or
+    // sharing an ownerDocument with, the live page), not
+    // `document.createElement('div')` (whose output IS live-document-owned
+    // and would start loading images / running inline handlers in a real
+    // browser even while detached).
+    const createElementSpy = vi.spyOn(document, 'createElement');
+    const parseFromStringSpy = vi.spyOn(DOMParser.prototype, 'parseFromString');
+
+    const el = mount(`
+      <template slot="proposal">
+        <img src="x" onerror="window.__oat_issue22_probe = true">
+        <button data-optical-action="submit" data-optical-capability="agent.session.import">Go</button>
+      </template>
+    `);
+    const readyEvent = new Promise<void>((resolve) =>
+      el.addEventListener('oat-manifest-ready', () => resolve(), { once: true })
+    );
+    el.source = 'payload bytes';
+    await readyEvent;
+
+    // Capability extraction still works correctly through the new parser.
+    expect(el.artifact?.uiProposal?.requestedCapabilities).toEqual([
+      { capability: 'agent.session.import' }
+    ]);
+    // The hostile inline handler never ran.
+    expect((window as unknown as { __oat_issue22_probe?: boolean }).__oat_issue22_probe).toBeUndefined();
+    // And the mechanism is the inert one, not a live `<div>`.
+    expect(parseFromStringSpy).toHaveBeenCalled();
+    expect(createElementSpy).not.toHaveBeenCalledWith('div');
+
+    createElementSpy.mockRestore();
+    parseFromStringSpy.mockRestore();
+  });
+
   it('produces no uiProposal when no proposal template is slotted', async () => {
     const el = mount('');
     const readyEvent = new Promise<void>((resolve) =>

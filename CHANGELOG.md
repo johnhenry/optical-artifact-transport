@@ -7,6 +7,26 @@ packages are versioned together.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`@johnhenry/oat-sender`: proposal HTML was parsed into a live element,
+  so a hostile `<template slot="proposal">` ran on the sender itself
+  ([#22](https://github.com/johnhenry/optical-artifact-transport/issues/22)).**
+  `extractCapabilities` read `data-optical-capability` attributes by
+  setting `container.innerHTML` on a `document.createElement('div')`.
+  Elements created that way are real, live-document-owned nodes even while
+  detached: an `<img src="x" onerror="…">` starts loading immediately and
+  its inline handler runs, independent of whether the element is ever
+  attached to a visible tree, and independent of the receiver's own
+  sanitizer (which correctly strips the attribute on the other end — this
+  was a self-XSS in the *authoring* path, before the artifact is even
+  encoded). Since sender apps will often build proposal HTML from
+  user-provided data, this made a self-XSS available to anyone who could
+  influence that HTML. Fixed by parsing with `DOMParser().parseFromString`
+  instead — its output document is never attached to, or sharing an
+  `ownerDocument` with, the live page, so neither inline handlers nor
+  resource loads fire.
+
 ### Documentation
 
 - Root README: added the CI/license badge row and a literal `Full
