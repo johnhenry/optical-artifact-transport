@@ -1,6 +1,6 @@
 {
   "name": "@johnhenry/oat-qr-fountain",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "LT fountain coding + QR frame render/decode for optical artifact transport",
   "repository": {
     "type": "git",

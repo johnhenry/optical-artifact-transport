@@ -1,7 +1,7 @@
 {
   "name": "optical-artifact-transport",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "OAT: browser-native optical-send/optical-receive web components for screen-to-camera artifact transport",
   "license": "MIT",
   "homepage": "https://opensource.johnhenry.me/oat/",

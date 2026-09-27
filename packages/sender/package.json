@@ -1,6 +1,6 @@
 {
   "name": "@johnhenry/oat-sender",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "<optical-send> custom element: builds a signed artifact and renders it as an animated fountain-coded QR sequence",
   "repository": {
     "type": "git",
@@ -30,8 +30,8 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@johnhenry/oat-protocol": "^0.1.0",
-    "@johnhenry/oat-qr-fountain": "^0.1.0"
+    "@johnhenry/oat-protocol": "^0.1.1",
+    "@johnhenry/oat-qr-fountain": "^0.1.1"
   },
   "devDependencies": {
     "typescript": "^5.6.3"

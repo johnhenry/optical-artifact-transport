@@ -1,6 +1,6 @@
 {
   "name": "@johnhenry/oat-receiver",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "<optical-receive> custom element: camera capture, fountain decode, artifact verification, and UI-proposal policy decisions",
   "repository": {
     "type": "git",
@@ -30,8 +30,8 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@johnhenry/oat-protocol": "^0.1.0",
-    "@johnhenry/oat-qr-fountain": "^0.1.0"
+    "@johnhenry/oat-protocol": "^0.1.1",
+    "@johnhenry/oat-qr-fountain": "^0.1.1"
   },
   "devDependencies": {
     "typescript": "^5.6.3"

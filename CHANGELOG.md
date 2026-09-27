@@ -5,7 +5,7 @@ packages plus the unpublished `examples/file-transfer` demo) are documented
 here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 packages are versioned together.
 
-## [Unreleased]
+## [0.1.1] — 2026-09-27
 
 ### Fixed
 

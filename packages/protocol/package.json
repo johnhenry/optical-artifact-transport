@@ -1,6 +1,6 @@
 {
   "name": "@johnhenry/oat-protocol",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "OAT artifact envelope, canonical CBOR, digests, signatures, capabilities, UI proposal grammar",
   "repository": {
     "type": "git",

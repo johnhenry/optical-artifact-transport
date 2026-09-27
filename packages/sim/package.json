@@ -1,6 +1,6 @@
 {
   "name": "@johnhenry/oat-sim",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Transport simulator: encode/decode a full OAT artifact over qr-fountain without camera hardware, injecting loss/duplication/reorder/corruption",
   "repository": {
     "type": "git",
@@ -30,8 +30,8 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@johnhenry/oat-protocol": "^0.1.0",
-    "@johnhenry/oat-qr-fountain": "^0.1.0"
+    "@johnhenry/oat-protocol": "^0.1.1",
+    "@johnhenry/oat-qr-fountain": "^0.1.1"
   },
   "devDependencies": {
     "typescript": "^5.6.3"
