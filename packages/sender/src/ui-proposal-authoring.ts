@@ -24,10 +24,18 @@ function templateFor(host: Element, slotName: string): HTMLTemplateElement | nul
 }
 
 function extractCapabilities(html: string): CapabilityRequest[] {
-  const container = document.createElement('div');
-  container.innerHTML = html;
+  // Issue #22: this markup is sender-authored proposal HTML, often built
+  // from user-provided data -- parsing it into a live `<div>` (innerHTML on
+  // a real, connected-document-capable element) lets inline event handlers
+  // (`<img onerror>`) and passive network fetches (`<img src>`, `<iframe>`)
+  // fire immediately, before the artifact is even encoded, independent of
+  // the receiver's own sanitizer. `DOMParser` documents produced by
+  // `parseFromString` are inert: scripts don't execute, and neither do
+  // event-handler attributes or resource loads, since the parsed document
+  // is never inserted into a live view.
+  const doc = new DOMParser().parseFromString(html, 'text/html');
   const capabilities = new Map<string, CapabilityRequest>();
-  container.querySelectorAll('[data-optical-capability]').forEach((el) => {
+  doc.querySelectorAll('[data-optical-capability]').forEach((el) => {
     const capability = el.getAttribute('data-optical-capability');
     if (capability) capabilities.set(capability, { capability });
   });
