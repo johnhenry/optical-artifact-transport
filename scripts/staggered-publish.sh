@@ -57,6 +57,17 @@ publish_package() {
 
   echo -e "${BLUE}[$TOTAL/$TOTAL_PACKAGES]${NC} Publishing ${YELLOW}$pkg${NC}..."
 
+  # Idempotency guard: a version already on the registry is a clean skip, so a push to
+  # main with no version bump publishes nothing.
+  local dir version
+  dir=$(node -e "const {execFileSync}=require('child_process');const w=JSON.parse(execFileSync('npm',['query','.workspace'],{encoding:'utf8'}));const p=w.find(x=>x.name===process.argv[1]);console.log(p.path)" "$pkg")
+  version=$(node -p "require('$dir/package.json').version")
+  if npm view "$pkg@$version" version >/dev/null 2>&1; then
+    echo -e "  ${YELLOW}Skipped ($pkg@$version already on npm)${NC}"
+    SKIPPED=$((SKIPPED + 1))
+    return 0
+  fi
+
   if $DRY_RUN; then
     npm publish --workspace="$pkg" --access public --provenance --dry-run
     SUCCESS=$((SUCCESS + 1))
@@ -65,6 +76,10 @@ publish_package() {
     if output=$(npm publish --workspace="$pkg" --access public --provenance 2>&1); then
       echo "$output"
       echo -e "  ${GREEN}Published successfully${NC}"
+      # By-product for changesets/action: it parses "New tag:" lines to push the tag
+      # and create a GitHub Release per published package.
+      git tag "$pkg@$version" 2>/dev/null || true
+      echo "New tag:  $pkg@$version"
       SUCCESS=$((SUCCESS + 1))
     elif echo "$output" | grep -q "cannot publish over the previously published"; then
       # Version already on the registry — package unchanged this release

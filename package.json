@@ -29,12 +29,16 @@
     "examples": "npm run example:01 && npm run example:02 && npm run example:03 && npm run example:04",
     "start": "serve -l tcp://0.0.0.0:${PORT:-3000} examples/file-transfer/dist",
     "publish:packages": "./scripts/staggered-publish.sh",
-    "publish:packages:dry-run": "./scripts/staggered-publish.sh --dry-run"
+    "publish:packages:dry-run": "./scripts/staggered-publish.sh --dry-run",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "./scripts/staggered-publish.sh"
   },
   "dependencies": {
     "serve": "^14.2.4"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.1",
     "@napi-rs/canvas": "^0.1.62",
     "esbuild": "0.21.5",
     "happy-dom": "^15.11.6",
