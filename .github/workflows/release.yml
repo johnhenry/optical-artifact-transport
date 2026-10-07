@@ -1,27 +1,41 @@
 name: Release
 
-# Publish all 7 @johnhenry/oat-* packages to npm (examples/file-transfer is
-# private and never published).
-#   - Tag-triggered: push a tag like v0.1.0.
-#   - Or run manually via workflow_dispatch (uses the versions already in
-#     each package.json).
-# Requires the NPM_TOKEN repo secret (an npm token with publish rights).
+# Publish the @johnhenry/oat-* packages from main with Changesets (fleet publish model:
+# main is the release branch, see johnhenry/workflows' README). examples/file-transfer
+# is private and never published.
+#
+# On every push to main this workflow either (a) opens/updates the "chore: version
+# packages" PR that applies pending changesets, or (b) when that PR has just been
+# merged, runs `npm run release` (scripts/staggered-publish.sh: dependency-ordered,
+# staggered, skips versions already on npm) and, as a by-product, changesets/action
+# pushes a tag + creates a GitHub Release per published package (the script emits the
+# "New tag:" lines it parses). A push with no pending bump publishes nothing.
+#
+# This file is the npm trusted-publisher entry point -- do not rename it.
 on:
   push:
-    tags: ["v*"]
-  workflow_dispatch:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write # version-bump commit, tags, GitHub Releases
+  pull-requests: write # the "Version Packages" PR
+  id-token: write # npm provenance / trusted publishing
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write # npm provenance
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # changesets diffs against the base branch
       - uses: actions/setup-node@v4
         with:
-          node-version: 26
+          node-version: 26 # must equal the root engines.node major
           cache: npm
           registry-url: https://registry.npmjs.org
       - run: npm ci
@@ -35,7 +49,13 @@ jobs:
       - name: Examples smoke (headless, via oat-sim — each script asserts its own results)
         run: npm run examples
 
-      - name: Publish to npm (dependency order)
-        run: ./scripts/staggered-publish.sh
+      - name: Version PR or publish (dependency order)
+        uses: changesets/action@v1
+        with:
+          publish: npm run release
+          version: npm run version-packages
+          title: "chore: version packages"
+          commit: "chore: version packages"
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

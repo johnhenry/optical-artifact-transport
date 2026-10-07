@@ -284,3 +284,21 @@ is drawn precisely below.
   add it to a host's CSP header for them.
 
 See `docs/design.md` for the full PRD this implementation follows.
+
+## Releasing
+
+Releases use [Changesets](https://github.com/changesets/changesets) and the family
+"main is the release branch" model ([johnhenry/workflows](https://github.com/johnhenry/workflows#the-publish-model-main-is-the-release-branch)).
+
+1. In a PR that changes a published `@johnhenry/oat-*` package, run `npm run changeset`
+   and commit the generated `.changeset/*.md`.
+2. Merging to `main` makes `.github/workflows/release.yml` open/update a
+   "chore: version packages" PR that applies the bumps and changelogs.
+3. Merging that PR publishes every package whose version is new, in dependency order
+   (`npm run release` -> `scripts/staggered-publish.sh`; already-published versions are
+   skipped), then pushes a `<package>@<version>` tag and creates a GitHub Release per
+   published package as by-products.
+
+Nobody creates tags or Releases by hand to cause a publish; `v*` tags no longer trigger
+anything. A push to `main` with no pending version bump publishes nothing.
+`release.yml` is the npm trusted-publisher workflow filename -- don't rename it.
