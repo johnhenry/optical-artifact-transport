@@ -1,4 +1,4 @@
-import { verifyArtifact, type OatArtifact, type VerificationResult } from '@johnhenry/oat-protocol';
+import { verifyArtifact, type OatArtifact, type ReplayGuard, type VerificationResult } from '@johnhenry/oat-protocol';
 
 export interface ReceiverVerificationOptions {
   requireSignature?: boolean;
@@ -20,6 +20,16 @@ export interface ReceiverVerificationOptions {
    * `rejectUnknownSender()` for a first-contact confirmation flow.
    */
   requireExplicitTrust?: boolean;
+  /** Reject artifacts with no `expiresAt` (default `true`). */
+  requireExpiry?: boolean;
+  /** When set, only artifacts bound to this `sessionId` verify (cross-session replay control). */
+  expectedSessionId?: string;
+  /**
+   * Replay control: an artifact whose nonce the guard has already seen (or
+   * that has no nonce) is rejected, and a fully valid artifact's nonce is
+   * recorded. A rejected artifact does not consume its nonce.
+   */
+  replayGuard?: ReplayGuard;
 }
 
 export interface ReceiverVerificationResult extends VerificationResult {
@@ -41,7 +51,11 @@ export function verifyReceivedArtifact(
   artifact: OatArtifact,
   options: ReceiverVerificationOptions = {}
 ): ReceiverVerificationResult {
-  const base = verifyArtifact(artifact, { requireSignature: options.requireSignature });
+  const base = verifyArtifact(artifact, {
+    requireSignature: options.requireSignature,
+    requireExpiry: options.requireExpiry,
+    expectedSessionId: options.expectedSessionId
+  });
 
   const mediaTypeAccepted =
     !options.acceptMediaTypes || options.acceptMediaTypes.length === 0
@@ -58,9 +72,23 @@ export function verifyReceivedArtifact(
   if (!mediaTypeAccepted) reasons.push('media-type-rejected');
   if (!senderTrusted) reasons.push('sender-untrusted');
 
+  let replayOk = true;
+  if (options.replayGuard) {
+    if (typeof artifact.nonce !== 'string' || artifact.nonce === '') {
+      replayOk = false;
+      reasons.push('nonce-missing');
+    } else if (options.replayGuard.has(artifact)) {
+      replayOk = false;
+      reasons.push('replayed');
+    }
+  }
+
+  const valid = base.valid && mediaTypeAccepted && senderTrusted && replayOk;
+  if (valid && options.replayGuard) options.replayGuard.add(artifact);
+
   return {
     ...base,
-    valid: base.valid && mediaTypeAccepted && senderTrusted,
+    valid,
     reasons,
     mediaTypeAccepted,
     senderTrusted

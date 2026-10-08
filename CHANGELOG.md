@@ -9,6 +9,25 @@ packages are versioned together.
 
 ### Security
 
+- **Payload replay: all three named controls now exist
+  ([#17](https://github.com/johnhenry/optical-artifact-transport/issues/17)).**
+  The design doc lists "Expiry, nonce, and session binding" against the
+  "Payload replay" threat, but only an optional expiry existed, so a captured
+  artifact (anyone who can see the screen can capture it) stayed valid
+  forever by default. Affected: all releases up to 0.1.1. Now: (1) `expiresAt`
+  is mandatory: `buildArtifact` defaults it to one hour
+  (`DEFAULT_ARTIFACT_TTL_MS`, `ttlMs`, or `expiresAt: null` to opt out) and
+  `verifyArtifact`/`verifyReceivedArtifact` reject a missing one
+  (`expires-at-missing`) unless `requireExpiry: false`; (2) a signed `nonce`
+  is stamped on every artifact and a bounded receiver-side `ReplayGuard`
+  rejects a second sighting (`replayed`; `nonce-missing` fails closed);
+  `<optical-receive>` enables one by default (`replayGuard` property);
+  (3) an optional signed `sessionId` is checked against `expectedSessionId` /
+  the `session-id` attribute (`session-mismatch`). Behaviour change:
+  artifacts without an expiry or a nonce (older senders) are now rejected by
+  `<optical-receive>`. The guard is in-memory and per-receiver. The unused
+  `CapabilityGrant` lifetime type remains unimplemented.
+
 - **`@johnhenry/oat-ui`: `mountSandboxedHtml` now enforces the sandbox
   eligibility gate itself, failing closed
   ([#18](https://github.com/johnhenry/optical-artifact-transport/issues/18)).**

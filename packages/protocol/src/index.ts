@@ -9,3 +9,4 @@ export * from './compression.js';
 export * from './manifest.js';
 export * from './sandbox-eligibility.js';
 export * from './ui-decision.js';
+export * from './replay-guard.js';

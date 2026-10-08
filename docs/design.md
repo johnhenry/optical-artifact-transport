@@ -646,7 +646,14 @@ Primary threats:
 
 Core controls:
 - Payload hashes and signatures.
-- Expiry, nonce, and session binding.
+- Expiry, nonce, and session binding. Implemented as: mandatory `expiresAt`
+  (`buildArtifact` defaults to one hour; `verifyArtifact` rejects an artifact
+  without one unless `requireExpiry: false`); a signed per-artifact `nonce`
+  remembered by a bounded, receiver-side `ReplayGuard` (per-receiver and
+  in-memory: it does not span reloads or devices); and an optional signed
+  `sessionId` checked against the receiver's `expectedSessionId`. A one-way
+  optical channel cannot support a receiver challenge, so these bound, rather
+  than eliminate, replay.
 - Maximum artifact size, packet count, frame rate, DOM node count, form depth, and decode CPU budget.
 - Receiver-owned policy and sanitization.
 - Explicit capability grant intersection.
