@@ -12,7 +12,13 @@ import {
 } from '@johnhenry/oat-protocol';
 import type { ImageDataLike } from '@johnhenry/oat-qr-fountain/decode';
 import { createCameraController, type CameraController, type FacingMode } from './camera-controller.js';
-import { createInlineDecodeWorker, type DecodeWorker } from './decode-worker.js';
+import {
+  createInlineDecodeWorker,
+  createWorkerDecodeClient,
+  type AsyncDecodeWorker,
+  type DecodeWorker,
+  type WorkerLike
+} from './decode-worker.js';
 import { DEFAULT_MAX_SCAN_WIDTH, scanFrameSize } from './scan-scaling.js';
 import { PacketStore } from './packet-store.js';
 import { assembleArtifact } from './assembler.js';
@@ -99,6 +105,7 @@ export class OpticalReceiveElement extends HTMLElement {
 
   readonly #camera: CameraController;
   readonly #decodeWorker: DecodeWorker;
+  #asyncDecoder: AsyncDecodeWorker | null = null;
   readonly #packetStore = new PacketStore();
   #policyEngine: PolicyEngine;
   #capabilityPolicy: CapabilityPolicy = createCapabilityPolicy([]);
@@ -474,9 +481,52 @@ export class OpticalReceiveElement extends HTMLElement {
     this.#scanCanvas.height = height;
     const ctx = this.#scanCanvas.getContext('2d');
     if (!ctx) return;
+    // With a decode worker, drop this tick if the previous frame is still
+    // decoding rather than queueing: the loop must never fall behind.
+    if (this.#asyncDecoder?.busy) return;
     ctx.drawImage(this.#video, 0, 0, width, height);
     const image = ctx.getImageData(0, 0, width, height);
-    this.processFrame(image);
+    void this.processFrameAsync(image);
+  }
+
+  /**
+   * Opt in to off-main-thread QR decoding. Pass a `Worker` running
+   * `@johnhenry/oat-receiver/decode-worker-entry` (the host app constructs
+   * it, since worker URL syntax is bundler-specific), or `null` to go back
+   * to inline decoding. Only the cheap `drawImage` + `getImageData` copy
+   * stays on the main thread; the pixel buffer is transferred, not copied.
+   * If the worker errors it is terminated and decoding falls back to the
+   * inline path, so a broken worker never stops a transfer (at the cost of the one frame
+   * that was in flight).
+   */
+  set decodeWorker(worker: WorkerLike | null) {
+    this.#asyncDecoder?.dispose();
+    this.#asyncDecoder = worker ? createWorkerDecodeClient(worker) : null;
+  }
+
+  /**
+   * Like `processFrame`, but decodes in the configured `decodeWorker` when
+   * there is one (falling back to inline decoding otherwise, and for every later
+   * frame once the worker has failed). Frames offered while a worker decode is in flight are dropped.
+   */
+  async processFrameAsync(image: ImageDataLike): Promise<void> {
+    const decoder = this.#asyncDecoder;
+    if (!decoder) {
+      this.processFrame(image);
+      return;
+    }
+    if (this.#packetStore.isComplete || decoder.busy) return;
+    try {
+      const packet = await decoder.decodeFrame(image);
+      this.#ingestPacket(packet);
+    } catch {
+      if (this.#asyncDecoder === decoder) {
+        decoder.dispose();
+        this.#asyncDecoder = null;
+      }
+      // The failed frame's pixel buffer was transferred away; drop it. Every
+      // later frame takes the inline path.
+    }
   }
 
   /**
@@ -489,7 +539,11 @@ export class OpticalReceiveElement extends HTMLElement {
   processFrame(image: ImageDataLike): void {
     if (this.#packetStore.isComplete) return;
 
-    const packet = this.#decodeWorker.decodeFrame(image);
+    this.#ingestPacket(this.#decodeWorker.decodeFrame(image));
+  }
+
+  #ingestPacket(packet: ReturnType<DecodeWorker['decodeFrame']>): void {
+    if (this.#packetStore.isComplete) return;
     const completed = this.#packetStore.ingestFrame(packet);
 
     this.dispatchEvent(

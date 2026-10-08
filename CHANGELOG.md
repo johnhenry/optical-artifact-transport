@@ -38,6 +38,17 @@ packages are versioned together.
   sender trusted and the receiver opted in (each strictly `true`). Breaking
   for direct callers of `mountSandboxedHtml` (new required option).
 
+### Added
+
+- **`@johnhenry/oat-receiver`: optional Worker-based QR decode
+  ([#12](https://github.com/johnhenry/optical-artifact-transport/issues/12)).**
+  `<optical-receive>.decodeWorker` accepts a `Worker` running
+  `@johnhenry/oat-receiver/decode-worker-entry`; the pixel buffer is
+  transferred, frames are dropped while a decode is in flight, and a failing
+  worker falls back to inline decoding. Constructing the `Worker` stays with
+  the host app (worker URL syntax is bundler-specific). `scripts/bench-decode.mjs`
+  measures the main-thread cost.
+
 ## [0.1.1] — 2026-09-27
 
 ### Fixed
