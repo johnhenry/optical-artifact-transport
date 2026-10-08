@@ -1,4 +1,4 @@
-import type { SandboxedHtmlView } from '@johnhenry/oat-protocol';
+import { checkSandboxEligibility, type SandboxEligibilityInput, type SandboxedHtmlView } from '@johnhenry/oat-protocol';
 import { createIframeBridge, type ReceiverUiResponse, type RemoteUiRequest } from './iframe-bridge.js';
 import { toTrustedSrcdoc } from './trusted-types.js';
 
@@ -48,6 +48,13 @@ export function renderUnsafeOptInPrompt(options: UnsafeOptInPromptOptions): void
 
 export interface SandboxHostOptions {
   view: SandboxedHtmlView;
+  /**
+   * The receiver-side inputs to `checkSandboxEligibility`. `mountSandboxedHtml`
+   * re-evaluates the gate itself and throws (mounting nothing) unless every
+   * field is strictly `true`, so the policy engine's decision cannot be
+   * bypassed by calling this exported primitive directly.
+   */
+  eligibility: SandboxEligibilityInput;
   onRequest: (request: RemoteUiRequest, respond: (response: ReceiverUiResponse) => void) => void;
   onRateLimited?: (droppedCount: number) => void;
   rateLimitPerSecond?: number;
@@ -72,11 +79,31 @@ const SANDBOXED_CSP =
  * document itself. A persistent unsafe-mode banner with a kill switch is
  * always rendered alongside it.
  *
- * Call only after `checkSandboxEligibility` passed and the user clicked
- * through `renderUnsafeOptInPrompt` — this is the low-level mount
- * primitive, not the policy decision, and does not re-check either.
+ * Enforces `checkSandboxEligibility` itself, failing closed: it throws —
+ * before touching `container` — unless `options.eligibility` is present and
+ * every field is strictly `true` (a truthy-but-not-`true` value such as the
+ * `'absent'` signature state does not count). The policy engine
+ * (`PolicyEngine.decideUi`) is the other enforcement point; both evaluate
+ * the same shared function. The user's click-through on
+ * `renderUnsafeOptInPrompt` is still the caller's responsibility.
+ *
+ * @throws if the sandbox eligibility gate does not pass.
  */
 export function mountSandboxedHtml(container: Element, options: SandboxHostOptions): SandboxHostHandle {
+  const input = options.eligibility as Partial<SandboxEligibilityInput> | undefined;
+  if (!input || typeof input !== 'object') {
+    throw new Error('mountSandboxedHtml: refusing to mount without sandbox eligibility input');
+  }
+  const strict: SandboxEligibilityInput = {
+    signatureValid: input.signatureValid === true,
+    senderTrusted: input.senderTrusted === true,
+    allowUnsafeHtml: input.allowUnsafeHtml === true
+  };
+  const eligibility = checkSandboxEligibility(strict);
+  if (!eligibility.eligible) {
+    throw new Error(`mountSandboxedHtml: refusing to mount, sandbox eligibility failed: ${eligibility.reasons.join(', ')}`);
+  }
+
   container.replaceChildren();
 
   const banner = document.createElement('div');

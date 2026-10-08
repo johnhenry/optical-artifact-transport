@@ -188,6 +188,10 @@ export class OpticalReceiveElement extends HTMLElement {
    * `sandboxed-html` proposal (valid signature, etc.) is downgraded unless
    * this is explicitly set `true`.
    */
+  get allowUnsafeHtml(): boolean {
+    return this.#allowUnsafeHtml;
+  }
+
   set allowUnsafeHtml(value: boolean) {
     this.#allowUnsafeHtml = value;
     this.#rebuildPolicyEngine();

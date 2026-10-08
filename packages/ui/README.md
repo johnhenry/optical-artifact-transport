@@ -63,8 +63,10 @@ pinned allowlist — profiles: `'text-only'`, `'strict'`, `'rich-text'`,
   `allow-top-navigation`, a rate-limited typed postMessage bridge, and
   self-navigation teardown (a second `load` event after the initial
   `srcdoc` render kills the frame — sandbox tokens don't gate
-  self-navigation, so the host watches for it out-of-band). Eligibility is
-  decided upstream by `checkSandboxEligibility`; don't mount without it.
+  self-navigation, so the host watches for it out-of-band). It enforces
+  `checkSandboxEligibility` itself: pass `eligibility` and it throws (mounting
+  nothing) unless the signature is valid, the sender trusted, and the receiver
+  opted in to unsafe HTML.
 - **Trusted Types**: under `Content-Security-Policy:
   require-trusted-types-for 'script'`, the host must allow the
   `oat-sandbox-srcdoc` policy (or `trusted-types *`) or the M6 iframe's

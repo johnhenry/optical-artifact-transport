@@ -667,6 +667,11 @@ receiver.addEventListener('oat-ui-proposal', ((e: CustomEvent) => {
       onActivate: () => {
         mountSandboxedHtml(proposalHost, {
           view: proposal.preferredView,
+          eligibility: {
+            signatureValid: receiver.verification?.signatureValid === true,
+            senderTrusted: receiver.verification?.senderTrusted === true,
+            allowUnsafeHtml: receiver.allowUnsafeHtml
+          },
           onRequest: (request, respond) => {
             log(receiverLog, 'sandbox request:', request);
             if (request.type === 'request.capability') {

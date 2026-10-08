@@ -5,6 +5,20 @@ packages plus the unpublished `examples/file-transfer` demo) are documented
 here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 packages are versioned together.
 
+## [Unreleased]
+
+### Security
+
+- **`@johnhenry/oat-ui`: `mountSandboxedHtml` now enforces the sandbox
+  eligibility gate itself, failing closed
+  ([#18](https://github.com/johnhenry/optical-artifact-transport/issues/18)).**
+  Previously only the receiver's policy engine checked
+  `checkSandboxEligibility`; the exported mount primitive would mount
+  sender HTML with script for any caller. It now requires an `eligibility`
+  option and throws, mounting nothing, unless the signature is valid, the
+  sender trusted and the receiver opted in (each strictly `true`). Breaking
+  for direct callers of `mountSandboxedHtml` (new required option).
+
 ## [0.1.1] — 2026-09-27
 
 ### Fixed
