@@ -302,3 +302,11 @@ Releases use [Changesets](https://github.com/changesets/changesets) and the fami
 Nobody creates tags or Releases by hand to cause a publish; `v*` tags no longer trigger
 anything. A push to `main` with no pending version bump publishes nothing.
 `release.yml` is the npm trusted-publisher workflow filename -- don't rename it.
+
+**One-time repository requirement.** `changesets/action` opens the Version Packages PR
+with `GITHUB_TOKEN`, which needs both `permissions: pull-requests: write` on the job
+(already set in the workflow) and the repo setting *Settings > Actions > General >
+"Allow GitHub Actions to create and approve pull requests"*; without it the run fails at
+`creating pull request`. Check / enable with
+`gh api repos/johnhenry/optical-artifact-transport/actions/permissions/workflow` and
+`gh api -X PUT repos/johnhenry/optical-artifact-transport/actions/permissions/workflow -f default_workflow_permissions=read -F can_approve_pull_request_reviews=true`.
