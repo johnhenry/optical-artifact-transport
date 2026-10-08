@@ -1,6 +1,6 @@
 {
   "name": "@johnhenry/oat-bootstrap",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "M5 bootstrap workflows: an optical artifact that unlocks a faster follow-on transport (verified release manifests, WebRTC signaling)",
   "repository": {
     "type": "git",
@@ -30,7 +30,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@johnhenry/oat-protocol": "^0.1.1"
+    "@johnhenry/oat-protocol": "^0.2.0"
   },
   "devDependencies": {
     "typescript": "^5.6.3"
