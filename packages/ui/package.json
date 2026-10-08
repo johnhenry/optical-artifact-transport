@@ -1,6 +1,6 @@
 {
   "name": "@johnhenry/oat-ui",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Receiver-owned safe rendering: sanitization profiles, safe-view/safe-html renderers, and the capability consent prompt",
   "repository": {
     "type": "git",
@@ -30,7 +30,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@johnhenry/oat-protocol": "^0.1.1"
+    "@johnhenry/oat-protocol": "^0.2.0"
   },
   "devDependencies": {
     "typescript": "^5.6.3"
