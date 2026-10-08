@@ -50,6 +50,7 @@ jobs:
         run: npm run examples
 
       - name: Version PR or publish (dependency order)
+        id: changesets
         uses: changesets/action@v1
         with:
           publish: npm run release
@@ -60,3 +61,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify published versions are on the registry
+        if: steps.changesets.outputs.published == 'true'
+        uses: johnhenry/workflows/.github/actions/verify-published@v1
+        with:
+          from-workspaces: true
