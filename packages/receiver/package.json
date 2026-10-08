@@ -24,6 +24,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./decode-worker-entry": {
+      "types": "./dist/decode-worker-entry.d.ts",
+      "import": "./dist/decode-worker-entry.js"
     }
   },
   "scripts": {
