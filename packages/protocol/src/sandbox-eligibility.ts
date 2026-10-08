@@ -25,8 +25,9 @@ export interface SandboxEligibilityInput {
  * eligibility condition holds. This depends only on receiver-side
  * inputs — a sender requesting `sandboxed-html` cannot influence it. Shared
  * by `@johnhenry/oat-receiver`'s policy engine (which decides the outcome) and
- * `@johnhenry/oat-ui`'s sandbox host (which enforces the same gate before mounting
- * anything) so the two can never disagree.
+ * `@johnhenry/oat-ui`'s `mountSandboxedHtml` (which re-evaluates this same
+ * function and refuses to mount, failing closed, when it does not pass) so
+ * the two can never disagree.
  */
 export function checkSandboxEligibility(input: SandboxEligibilityInput): SandboxEligibility {
   const reasons: string[] = [];

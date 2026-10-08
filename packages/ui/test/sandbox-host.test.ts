@@ -74,11 +74,46 @@ const view: SandboxedHtmlView = {
   html: '<button id="go">go</button><script>window.parent.postMessage({type:"ui.ready"}, "*")</script>'
 };
 
+const ELIGIBLE = { signatureValid: true, senderTrusted: true, allowUnsafeHtml: true };
+
+describe('mountSandboxedHtml eligibility gate (fails closed)', () => {
+  const cases: Array<[string, { signatureValid: boolean; senderTrusted: boolean; allowUnsafeHtml: boolean }, string]> = [
+    ['unsigned / unverified signature', { ...ELIGIBLE, signatureValid: false }, 'signature-required'],
+    ['untrusted (self-signed) sender', { ...ELIGIBLE, senderTrusted: false }, 'sender-not-trusted'],
+    ['receiver has not opted in to unsafe HTML', { ...ELIGIBLE, allowUnsafeHtml: false }, 'receiver-policy-disallows-unsafe-html']
+  ];
+
+  for (const [name, eligibility, reason] of cases) {
+    it(`refuses to mount: ${name}`, () => {
+      const container = document.createElement('div');
+      container.textContent = 'previous content';
+      document.body.appendChild(container);
+
+      expect(() => mountSandboxedHtml(container, { view, eligibility, onRequest: vi.fn() })).toThrow(reason);
+      expect(container.querySelector('iframe')).toBeNull();
+      expect(container.textContent).toBe('previous content');
+    });
+  }
+
+  it('refuses when no eligibility input is supplied at all (JS callers bypassing the types)', () => {
+    const container = document.createElement('div');
+    expect(() => mountSandboxedHtml(container, { view, onRequest: vi.fn() } as never)).toThrow(/eligib/i);
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('refuses when an eligibility field is truthy but not strictly true', () => {
+    const container = document.createElement('div');
+    const sneaky = { signatureValid: 'absent', senderTrusted: 1, allowUnsafeHtml: true } as never;
+    expect(() => mountSandboxedHtml(container, { view, eligibility: sneaky, onRequest: vi.fn() })).toThrow();
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+});
+
 describe('mountSandboxedHtml', () => {
   it('sets sandbox="allow-scripts" and nothing else — no allow-same-origin/forms/popups/downloads/top-navigation', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const { iframe } = mountSandboxedHtml(container, { view, onRequest: vi.fn() });
+    const { iframe } = mountSandboxedHtml(container, { view, eligibility: ELIGIBLE, onRequest: vi.fn() });
 
     expect(iframe.getAttribute('sandbox')).toBe('allow-scripts');
     for (const forbidden of ['allow-same-origin', 'allow-forms', 'allow-popups', 'allow-downloads', 'allow-top-navigation']) {
@@ -89,7 +124,7 @@ describe('mountSandboxedHtml', () => {
   it('sets referrerpolicy=no-referrer and an empty Permissions-Policy (allow="")', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const { iframe } = mountSandboxedHtml(container, { view, onRequest: vi.fn() });
+    const { iframe } = mountSandboxedHtml(container, { view, eligibility: ELIGIBLE, onRequest: vi.fn() });
 
     expect(iframe.getAttribute('referrerpolicy')).toBe('no-referrer');
     expect(iframe.getAttribute('allow')).toBe('');
@@ -98,7 +133,7 @@ describe('mountSandboxedHtml', () => {
   it('injects a restrictive CSP into the srcdoc document ahead of the sender HTML', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const { iframe } = mountSandboxedHtml(container, { view, onRequest: vi.fn() });
+    const { iframe } = mountSandboxedHtml(container, { view, eligibility: ELIGIBLE, onRequest: vi.fn() });
 
     expect(iframe.srcdoc).toContain("default-src 'none'");
     expect(iframe.srcdoc).toContain("connect-src 'none'");
@@ -108,7 +143,7 @@ describe('mountSandboxedHtml', () => {
   it('renders a persistent unsafe-mode banner alongside the frame', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
-    mountSandboxedHtml(container, { view, onRequest: vi.fn() });
+    mountSandboxedHtml(container, { view, eligibility: ELIGIBLE, onRequest: vi.fn() });
 
     expect(container.textContent).toContain('Unsafe HTML mode active');
   });
@@ -116,7 +151,7 @@ describe('mountSandboxedHtml', () => {
   it('the kill-switch button removes the frame and banner entirely', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
-    mountSandboxedHtml(container, { view, onRequest: vi.fn() });
+    mountSandboxedHtml(container, { view, eligibility: ELIGIBLE, onRequest: vi.fn() });
 
     expect(container.querySelector('iframe')).not.toBeNull();
     container.querySelector('button')!.click();
@@ -128,7 +163,7 @@ describe('mountSandboxedHtml', () => {
   it('destroy() also works as a direct handle call, independent of the banner button', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const handle = mountSandboxedHtml(container, { view, onRequest: vi.fn() });
+    const handle = mountSandboxedHtml(container, { view, eligibility: ELIGIBLE, onRequest: vi.fn() });
 
     handle.destroy();
     expect(container.querySelector('iframe')).toBeNull();
@@ -141,7 +176,7 @@ describe('mountSandboxedHtml', () => {
     const onRequest = vi.fn((request, respond) => {
       if (request.type === 'ui.ready') respond({ type: 'policy', grantedCapabilities: [] });
     });
-    const { iframe } = mountSandboxedHtml(container, { view, onRequest });
+    const { iframe } = mountSandboxedHtml(container, { view, eligibility: ELIGIBLE, onRequest });
 
     const postMessageSpy = vi.spyOn(iframe.contentWindow as Window, 'postMessage');
 
@@ -157,7 +192,7 @@ describe('mountSandboxedHtml', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const onRequest = vi.fn();
-    mountSandboxedHtml(container, { view, onRequest });
+    mountSandboxedHtml(container, { view, eligibility: ELIGIBLE, onRequest });
 
     const otherContainer = document.createElement('div');
     document.body.appendChild(otherContainer);
@@ -174,7 +209,7 @@ describe('mountSandboxedHtml', () => {
   it('auto-destroys if the sandboxed iframe self-navigates away from its initial srcdoc (CSP-bypass mitigation)', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const handle = mountSandboxedHtml(container, { view, onRequest: vi.fn() });
+    const handle = mountSandboxedHtml(container, { view, eligibility: ELIGIBLE, onRequest: vi.fn() });
 
     expect(container.querySelector('iframe')).not.toBeNull();
 
