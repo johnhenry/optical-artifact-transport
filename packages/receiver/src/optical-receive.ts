@@ -2,6 +2,8 @@ import {
   createCapabilityPolicy,
   buildUiDecisionArtifact,
   randomId,
+  createReplayGuard,
+  type ReplayGuard,
   type CapabilityPolicy,
   type OatArtifact,
   type BuildArtifactOptions,
@@ -103,6 +105,7 @@ export class OpticalReceiveElement extends HTMLElement {
   #allowUnsafeHtml = false;
   #trustedPublicKeysHex: string[] = [];
   #requireExplicitTrust = false;
+  #replayGuard: ReplayGuard | null = createReplayGuard();
   #requireSignatureFor: SignableProfile[] = [];
   #approval: Partial<Record<SignableProfile, UiApprovalMode>> = {};
   #autoApprove: string[] = [];
@@ -526,6 +529,30 @@ export class OpticalReceiveElement extends HTMLElement {
     this.#processVerification(artifact, verification);
   }
 
+  /**
+   * The transfer/session id this receiver expects artifacts to be bound to —
+   * the `session-id` attribute. When set, an artifact whose `sessionId`
+   * differs (or is absent) is rejected with `session-mismatch`.
+   */
+  get sessionId(): string | null {
+    return this.getAttribute('session-id');
+  }
+
+  set sessionId(value: string | null) {
+    if (value === null) this.removeAttribute('session-id');
+    else this.setAttribute('session-id', value);
+  }
+
+  /**
+   * The nonce memory used to reject replayed artifacts. On by default (an
+   * in-memory, bounded `ReplayGuard` that survives `reset()`); assign a
+   * guard of your own to share or persist it, or `null` to disable replay
+   * detection (artifacts are then still subject to mandatory expiry).
+   */
+  set replayGuard(guard: ReplayGuard | null) {
+    this.#replayGuard = guard;
+  }
+
   #verifyArtifact(artifact: OatArtifact): ReceiverVerificationResult {
     const acceptAttr = this.getAttribute('accept');
     const acceptMediaTypes = acceptAttr ? acceptAttr.split(',').map((s) => s.trim()).filter(Boolean) : undefined;
@@ -535,7 +562,9 @@ export class OpticalReceiveElement extends HTMLElement {
       requireSignature,
       acceptMediaTypes,
       trustedPublicKeysHex: this.#trustedPublicKeysHex,
-      requireExplicitTrust: this.#requireExplicitTrust
+      requireExplicitTrust: this.#requireExplicitTrust,
+      expectedSessionId: this.sessionId ?? undefined,
+      replayGuard: this.#replayGuard ?? undefined
     });
   }
 

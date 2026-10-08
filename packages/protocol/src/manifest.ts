@@ -11,12 +11,31 @@ import { encodeCanonical } from './canonical-cbor.js';
 import { randomId } from './random-id.js';
 import { signPayload, verifySignature } from './signatures.js';
 
+/**
+ * Default artifact lifetime when the caller supplies neither `expiresAt` nor
+ * `ttlMs`: one hour. Optical artifacts are displayed, so anyone who can see
+ * the screen can capture the exact bytes; a short mandatory lifetime bounds
+ * how long a captured copy stays usable.
+ */
+export const DEFAULT_ARTIFACT_TTL_MS = 60 * 60 * 1000;
+
 export interface BuildArtifactOptions {
   mediaType: string;
   payload: Uint8Array;
   id?: string;
   createdAt?: string;
-  expiresAt?: string;
+  /**
+   * Explicit expiry instant. `null` deliberately builds an artifact with no
+   * expiry (receivers must then opt out with `requireExpiry: false`).
+   * Default: `createdAt + (ttlMs ?? DEFAULT_ARTIFACT_TTL_MS)`.
+   */
+  expiresAt?: string | null;
+  /** Lifetime in ms from `createdAt` when `expiresAt` is not given. */
+  ttlMs?: number;
+  /** Per-artifact replay nonce. Default: a fresh random id. */
+  nonce?: string;
+  /** Binds the artifact to a transfer/session; see `OatArtifact.sessionId`. */
+  sessionId?: string;
   compression?: CompressionScheme;
   sign?: { secretKey: Uint8Array; keyId?: string };
   encryption?: ArtifactEncryption;
@@ -36,11 +55,25 @@ export async function buildArtifact(options: BuildArtifactOptions): Promise<OatA
   const compressed = await compress(options.payload, compression);
   const digest = computeDigest(compressed);
 
+  const createdAt = options.createdAt ?? new Date().toISOString();
+  let expiresAt: string | undefined;
+  if (options.expiresAt === null) {
+    expiresAt = undefined;
+  } else if (options.expiresAt !== undefined) {
+    expiresAt = options.expiresAt;
+  } else {
+    const createdMs = Date.parse(createdAt);
+    const base = Number.isNaN(createdMs) ? Date.now() : createdMs;
+    expiresAt = new Date(base + (options.ttlMs ?? DEFAULT_ARTIFACT_TTL_MS)).toISOString();
+  }
+
   const base: SignablePayloadFields = {
     version: 1,
     id: options.id ?? randomId(),
-    createdAt: options.createdAt ?? new Date().toISOString(),
-    expiresAt: options.expiresAt,
+    createdAt,
+    expiresAt,
+    nonce: options.nonce ?? randomId(),
+    sessionId: options.sessionId,
     mediaType: options.mediaType,
     payload: compressed,
     compression,
@@ -96,11 +129,14 @@ const ISO_DATE_PREFIX = /^\d{4}-\d{2}-\d{2}(?:[T ]|$)/;
  * exists in the code at all — so an unreadable value silently disabling it
  * is the wrong direction to fail in.
  *
- * Absent is still absent: an artifact with no `expiresAt` does not expire,
- * which is the documented optional-field behaviour and unchanged.
+ * Absent `expiresAt` is rejected (`expires-at-missing`) unless the caller
+ * opts out with `requireExpiry: false`: a never-expiring, replayable
+ * artifact must be a deliberate decision, not the default.
  */
-function evaluateExpiry(expiresAt: unknown): { expired: boolean; reason?: string } {
-  if (expiresAt === undefined || expiresAt === null) return { expired: false };
+function evaluateExpiry(expiresAt: unknown, requireExpiry: boolean): { expired: boolean; reason?: string } {
+  if (expiresAt === undefined || expiresAt === null) {
+    return requireExpiry ? { expired: true, reason: 'expires-at-missing' } : { expired: false };
+  }
   if (typeof expiresAt !== 'string' || !ISO_DATE_PREFIX.test(expiresAt)) {
     return { expired: true, reason: 'expires-at-unreadable' };
   }
@@ -115,7 +151,13 @@ function evaluateExpiry(expiresAt: unknown): { expired: boolean; reason?: string
  */
 export function verifyArtifact(
   artifact: OatArtifact,
-  opts: { requireSignature?: boolean } = {}
+  opts: {
+    requireSignature?: boolean;
+    /** Reject artifacts with no `expiresAt` (default `true`). */
+    requireExpiry?: boolean;
+    /** When set, the artifact's `sessionId` must equal this (cross-session replay control). */
+    expectedSessionId?: string;
+  } = {}
 ): VerificationResult {
   const reasons: string[] = [];
 
@@ -131,12 +173,15 @@ export function verifyArtifact(
     reasons.push('signature-required');
   }
 
-  const expiry = evaluateExpiry(artifact.expiresAt);
+  const expiry = evaluateExpiry(artifact.expiresAt, opts.requireExpiry ?? true);
   const expired = expiry.expired;
   if (expiry.reason) reasons.push(expiry.reason);
 
+  const sessionOk = opts.expectedSessionId === undefined || artifact.sessionId === opts.expectedSessionId;
+  if (!sessionOk) reasons.push('session-mismatch');
+
   const signatureOk = artifact.signature ? signatureValid === true : !opts.requireSignature;
-  const valid = digestValid && signatureOk && !expired;
+  const valid = digestValid && signatureOk && !expired && sessionOk;
 
   return { valid, digestValid, signatureValid, expired, reasons };
 }

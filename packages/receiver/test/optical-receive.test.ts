@@ -683,3 +683,60 @@ describe('<optical-receive> end-to-end (synthetic QR frames)', () => {
     expect(el.uiDecision?.effectiveCapabilities).toEqual(['agent.session.import']);
   });
 });
+
+describe('<optical-receive> replay controls', () => {
+  const frameCache = new WeakMap<object, ImageDataLike[]>();
+  async function framesFor(artifact: Awaited<ReturnType<typeof buildArtifact>>): Promise<ImageDataLike[]> {
+    let frames = frameCache.get(artifact);
+    if (!frames) {
+      frames = await renderFrames(encodeCanonical(artifact) as Uint8Array, 120, 40);
+      frameCache.set(artifact, frames);
+    }
+    return frames;
+  }
+  async function deliver(el: OpticalReceiveElement, artifact: Awaited<ReturnType<typeof buildArtifact>>): Promise<void> {
+    const frames = await framesFor(artifact);
+    for (const frame of frames) {
+      el.processFrame(frame);
+      if (['accepted', 'rejected', 'error'].includes(el.state)) break;
+    }
+    await new Promise((r) => setTimeout(r, 20));
+  }
+
+  it('rejects a captured artifact replayed to the same receiver after reset()', { timeout: 60_000 }, async () => {
+    const artifact = await buildArtifact({ mediaType: 'application/octet-stream', payload: crypto.getRandomValues(new Uint8Array(300)) });
+    const el = mount();
+    await deliver(el, artifact);
+    expect(el.state).toBe('accepted');
+
+    el.reset();
+    await deliver(el, artifact);
+    expect(el.state).toBe('rejected');
+    expect(el.verification?.reasons).toContain('replayed');
+  });
+
+  it('rejects an artifact bound to a different session than session-id', { timeout: 60_000 }, async () => {
+    const artifact = await buildArtifact({ mediaType: 'application/octet-stream', payload: new Uint8Array(200), sessionId: 'other' });
+    const el = mount();
+    el.setAttribute('session-id', 'mine');
+    await deliver(el, artifact);
+    expect(el.state).toBe('rejected');
+    expect(el.verification?.reasons).toContain('session-mismatch');
+  });
+
+  it('accepts an artifact bound to the matching session-id', { timeout: 60_000 }, async () => {
+    const artifact = await buildArtifact({ mediaType: 'application/octet-stream', payload: new Uint8Array(200), sessionId: 'mine' });
+    const el = mount();
+    el.setAttribute('session-id', 'mine');
+    await deliver(el, artifact);
+    expect(el.state).toBe('accepted');
+  });
+
+  it('rejects an expired artifact', { timeout: 60_000 }, async () => {
+    const artifact = await buildArtifact({ mediaType: 'application/octet-stream', payload: new Uint8Array(200), expiresAt: '2000-01-01T00:00:00Z' });
+    const el = mount();
+    await deliver(el, artifact);
+    expect(el.state).toBe('rejected');
+    expect(el.verification?.reasons).toContain('expired');
+  });
+});
